@@ -1,3 +1,4 @@
+mod idl;
 mod parser;
 mod spec;
 

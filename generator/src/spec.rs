@@ -1,4 +1,7 @@
-use crate::{parser::Parser, Category, CategoryOrElement};
+use crate::{
+    parser::{ParsedIdl, Parser},
+    Category, CategoryOrElement,
+};
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -27,6 +30,7 @@ pub struct ParsedElement {
     pub end_tag: bool,
     pub global_attributes: bool,
     pub attributes: HashMap</* name: */ String, /* description: */ String>,
+    pub idl: ParsedIdl,
 }
 
 // TODO Void elements: https://html.spec.whatwg.org/multipage/syntax.html#elements-2
@@ -149,6 +153,7 @@ impl Spec {
             end_tag: true,
             global_attributes: true,
             attributes: HashMap::new(),
+            idl: ParsedIdl::Uses(String::from("__INVALID__")),
         };
         let mut section = Option::<Section>::None;
 
@@ -177,7 +182,14 @@ impl Spec {
                         parser.attribute(&text, &mut element);
                     }
                     Section::Accessibility => {}
-                    Section::DOM => {}
+                    Section::DOM => {
+                        let text = d
+                            .select(&selector!("pre"))
+                            .next()
+                            .map(|pre| pre.text().collect::<String>())
+                            .unwrap_or(text);
+                        parser.idl(&text, &mut element);
+                    }
                 },
                 _ => panic!(),
             }

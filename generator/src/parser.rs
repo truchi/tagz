@@ -1,5 +1,6 @@
 use crate::spec::ParsedElement;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 type Parse = fn(&Regex, &str, &mut ParsedElement) -> Option<()>;
@@ -12,6 +13,7 @@ pub struct Parser {
     content: Counts,
     tag_omission: Counts,
     attribute: Counts,
+    idl: Counts,
     regexes: Vec<Regex>,
 }
 
@@ -23,6 +25,7 @@ impl Parser {
             content: HashMap::new(),
             tag_omission: HashMap::new(),
             attribute: HashMap::new(),
+            idl: HashMap::new(),
             regexes: Vec::new(),
         };
 
@@ -50,6 +53,9 @@ impl Parser {
         }
         for (res, f) in Self::attribute_parsers() {
             push(res, *f, &mut parser.attribute);
+        }
+        for (res, f) in Self::idl_parsers() {
+            push(res, *f, &mut parser.idl);
         }
 
         parser
@@ -105,6 +111,10 @@ impl Parser {
         );
     }
 
+    pub fn idl(&mut self, text: &str, element: &mut ParsedElement) {
+        Self::parse("idl", &mut self.idl, &mut self.regexes, text, element);
+    }
+
     pub fn errors(&self) {
         let errors = |name: &str, counts: &Counts| {
             for ((index, _), count) in counts {
@@ -123,6 +133,7 @@ impl Parser {
         errors("content", &self.content);
         errors("tag_omission", &self.tag_omission);
         errors("attribute", &self.attribute);
+        errors("idl", &self.idl);
     }
 }
 
@@ -135,15 +146,6 @@ impl Parser {
         text: &str,
         element: &mut ParsedElement,
     ) {
-        // Simplify:
-        // - Collapse whitespace
-        // - Trim whitespace
-        // - Trim ending period
-        // - Lowercase
-        let re = Regex::new(r"\s+").unwrap();
-        let text = re.replace_all(&text, " ");
-        let text = &text.trim().trim_end_matches('.').to_lowercase();
-
         for ((index, parse), count) in counts {
             if parse(&regexes[*index], text, element).is_some() {
                 *count += 1;
@@ -152,6 +154,15 @@ impl Parser {
         }
 
         tracing::warn!(element.name, section, text, "😓");
+    }
+
+    fn simplify(text: &str) -> String {
+        Regex::new(r"\s+") // Collapse whitespace
+            .unwrap()
+            .replace_all(&text, " ")
+            .trim()
+            .trim_end_matches('.')
+            .to_lowercase()
     }
 
     fn category_parsers() -> &'static [(&'static [&'static str], Parse)] {
@@ -174,7 +185,8 @@ impl Parser {
                 r"none",
             ],
             |re: &Regex, text: &str, element: &mut ParsedElement| {
-                let captures = re.captures(text)?;
+                let text = Self::simplify(text);
+                let captures = re.captures(&text)?;
                 let categories = captures
                     .iter()
                     .skip(1)
@@ -232,7 +244,8 @@ impl Parser {
                     r"after \S+ or \S+ elements inside (\S+) elements that are children of an? \S+ element",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let captures = re.captures(text)?;
+                    let text = Self::simplify(text);
+                    let captures = re.captures(&text)?;
                     let contexts = captures
                         .iter()
                         .skip(1)
@@ -254,7 +267,8 @@ impl Parser {
                     r"wherever a subdocument fragment is allowed in a compound document",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    re.captures(text)?;
+                    let text = Self::simplify(text);
+                    re.captures(&text)?;
                     assert_eq!(element.name, "html");
                     tracing::trace!(element.name, text, "😍");
 
@@ -319,7 +333,8 @@ impl Parser {
                     r"when scripting is disabled, in an? \S+ element: in any order, zero or more (\S+) elements, zero or more (\S+) elements, and zero or more (\S+) elements",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let captures = re.captures(text)?;
+                    let text = Self::simplify(text);
+                    let captures = re.captures(&text)?;
                     let contents = captures
                         .iter()
                         .skip(1)
@@ -341,7 +356,8 @@ impl Parser {
                     r"if there is an? \S+ attribute, the element must be either empty or contain only script documentation that also matches script content restrictions",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    re.captures(text)?;
+                    let text = Self::simplify(text);
+                    re.captures(&text)?;
                     assert_eq!(element.name, "script");
                     tracing::trace!(element.name, text, "😍");
 
@@ -351,7 +367,8 @@ impl Parser {
             (
                 &[r"otherwise: text that conforms to the requirements given in the prose"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    re.captures(text)?;
+                    let text = Self::simplify(text);
+                    re.captures(&text)?;
                     assert_eq!(element.name, "noscript");
                     tracing::trace!(element.name, text, "😍");
 
@@ -362,7 +379,8 @@ impl Parser {
                 // TODO: Read the prose for <ruby>
                 &[r"see prose"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    re.captures(text)?;
+                    let text = Self::simplify(text);
+                    re.captures(&text)?;
                     assert_eq!(element.name, "ruby");
                     tracing::trace!(element.name, text, "😍");
 
@@ -380,7 +398,8 @@ impl Parser {
                     r"an? \S+ element's start|end tag can be omitted if .*",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    re.captures(text)?;
+                    let text = Self::simplify(text);
+                    re.captures(&text)?;
                     let end_tag = true;
                     tracing::trace!(element.name, end_tag, text, "😍");
 
@@ -392,7 +411,8 @@ impl Parser {
             (
                 &[r"no end tag"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    re.captures(text)?;
+                    let text = Self::simplify(text);
+                    re.captures(&text)?;
                     let end_tag = false;
                     tracing::trace!(element.name, end_tag, text, "😍");
 
@@ -409,7 +429,8 @@ impl Parser {
             (
                 &[r"global attributes"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    re.captures(text)?;
+                    let text = Self::simplify(text);
+                    re.captures(&text)?;
                     let global_attributes = true;
                     tracing::trace!(element.name, global_attributes, text, "😍");
 
@@ -427,7 +448,8 @@ impl Parser {
                     r"if the element is not a child of an \S+ or \S+ element: (\S+) — (.*)",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let captures = re.captures(text)?;
+                    let text = Self::simplify(text);
+                    let captures = re.captures(&text)?;
                     let name = captures.get(1).unwrap().as_str().to_string();
                     let description = captures
                         .get(2)
@@ -448,12 +470,153 @@ impl Parser {
                     r"any other attribute that has no namespace \(see prose\)",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    re.captures(text)?;
+                    let text = Self::simplify(text);
+                    re.captures(&text)?;
                     tracing::trace!(element.name, text, "😍");
 
                     Some(())
                 },
             ),
         ]
+    }
+
+    fn idl_parsers() -> &'static [(&'static [&'static str], Parse)] {
+        &[
+            (
+                &[r"uses? (\S+)", r"uses (\S+), as defined for \S+ elements"],
+                |re: &Regex, text: &str, element: &mut ParsedElement| {
+                    let text = Self::simplify(text);
+                    let captures = re.captures(&text)?;
+                    let uses = captures[1].to_string();
+                    tracing::trace!(element.name, uses, text, "😍");
+
+                    element.idl = ParsedIdl::Uses(uses);
+
+                    Some(())
+                },
+            ),
+            (
+                &[r"\[exposed=window.*", r"typedef .*"],
+                |re: &Regex, text: &str, element: &mut ParsedElement| {
+                    re.captures(&Self::simplify(text))?;
+                    tracing::trace!(element.name, "😍");
+
+                    element.idl = ParsedIdl::parse(text);
+
+                    Some(())
+                },
+            ),
+        ]
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum AttributeType {
+    Bool,
+    I16,
+    U16,
+    I32,
+    U32,
+    I64,
+    U64,
+    F32,
+    F64,
+    String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum ParsedIdl {
+    Uses(String),
+    ParsedIdl {
+        name: String,
+        inherits: Option<String>,
+        attributes: HashMap<String, AttributeType>,
+    },
+}
+
+impl ParsedIdl {
+    // TODO: "... includes ..." for more attributes, maybe events.
+    fn parse(text: &str) -> Self {
+        use weedle::{interface::*, types::*, *};
+
+        // https://webidl.spec.whatwg.org/#idl-types
+        fn ty(attribute: &AttributeInterfaceMember) -> Option<AttributeType> {
+            Some(match &attribute.type_.type_ {
+                Type::Single(ty) => match ty {
+                    SingleType::NonAny(ty) => match ty {
+                        NonAnyType::Boolean(_) => AttributeType::Bool,
+                        NonAnyType::Integer(i) => match i.type_ {
+                            IntegerType::Short(t) => {
+                                if t.unsigned.is_some() {
+                                    AttributeType::U16
+                                } else {
+                                    AttributeType::I16
+                                }
+                            }
+                            IntegerType::Long(t) => {
+                                if t.unsigned.is_some() {
+                                    AttributeType::U32
+                                } else {
+                                    AttributeType::I32
+                                }
+                            }
+                            IntegerType::LongLong(t) => {
+                                if t.unsigned.is_some() {
+                                    AttributeType::U64
+                                } else {
+                                    AttributeType::I64
+                                }
+                            }
+                        },
+                        NonAnyType::FloatingPoint(f) => match f.type_ {
+                            FloatingPointType::Float(_) => AttributeType::F32,
+                            FloatingPointType::Double(_) => AttributeType::F64,
+                        },
+                        NonAnyType::USVString(_) => AttributeType::String,
+                        NonAnyType::DOMString(_) => AttributeType::String,
+                        NonAnyType::Object(_) => return None,
+                        NonAnyType::Identifier(_) => return None,
+                        _ => panic!(),
+                    },
+                    SingleType::Any(_) => panic!(),
+                },
+                _ => panic!(),
+            })
+        }
+
+        let definitions = parse(&text).unwrap();
+        let mut interfaces = definitions
+            .iter()
+            .filter_map(|definition| match definition {
+                Definition::Interface(interface) => Some(interface),
+                _ => None,
+            });
+        let interface = interfaces.next().unwrap();
+        assert!(interfaces.next().is_none());
+
+        let name = interface.identifier.0.to_string();
+        let inherits = interface
+            .inheritance
+            .map(|parent| parent.identifier.0.to_string());
+        let attributes = interface
+            .members
+            .body
+            .iter()
+            .filter_map(|member| {
+                if let InterfaceMember::Attribute(attribute) = member {
+                    Some(attribute)
+                } else {
+                    None
+                }
+            })
+            .filter(|attribute| attribute.readonly.is_none())
+            .filter_map(|attribute| Some((attribute.identifier.0.to_string(), ty(attribute)?)))
+            .collect();
+
+        Self::ParsedIdl {
+            name,
+            inherits,
+            attributes,
+        }
     }
 }
