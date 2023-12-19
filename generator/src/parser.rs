@@ -10,6 +10,7 @@ pub struct Parser {
     categories: Counts,
     context: Counts,
     content: Counts,
+    tag_omission: Counts,
     regexes: Vec<Regex>,
 }
 
@@ -19,6 +20,7 @@ impl Parser {
             categories: HashMap::new(),
             context: HashMap::new(),
             content: HashMap::new(),
+            tag_omission: HashMap::new(),
             regexes: Vec::new(),
         };
 
@@ -40,6 +42,9 @@ impl Parser {
         }
         for (res, f) in Self::content_parsers() {
             push(res, *f, &mut parser.content);
+        }
+        for (res, f) in Self::tag_omission_parsers() {
+            push(res, *f, &mut parser.tag_omission);
         }
 
         parser
@@ -75,6 +80,16 @@ impl Parser {
         );
     }
 
+    pub fn tag_omission(&mut self, text: &str, element: &mut ParsedElement) {
+        Self::parse(
+            "tag_omission",
+            &mut self.tag_omission,
+            &mut self.regexes,
+            text,
+            element,
+        );
+    }
+
     pub fn errors(&self) {
         let errors = |name: &str, counts: &Counts| {
             for ((index, _), count) in counts {
@@ -91,6 +106,7 @@ impl Parser {
         errors("categories", &self.categories);
         errors("context", &self.context);
         errors("content", &self.content);
+        errors("tag_omission", &self.tag_omission);
     }
 }
 
@@ -323,11 +339,44 @@ impl Parser {
                 },
             ),
             (
+                // TODO: Read the prose for <ruby>
                 &[r"See prose"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     re.captures(text)?;
                     assert_eq!(element.name, "ruby");
                     tracing::trace!(element.name, text, "😍");
+
+                    Some(())
+                },
+            ),
+        ]
+    }
+
+    fn tag_omission_parsers() -> &'static [(&'static [&'static str], Parse)] {
+        &[
+            (
+                &[
+                    r"Neither tag is omissible",
+                    r"An? \S+ element's start|end tag can be omitted if .*",
+                ],
+                |re: &Regex, text: &str, element: &mut ParsedElement| {
+                    re.captures(text)?;
+
+                    let end_tag = true;
+                    tracing::trace!(element.name, end_tag, text, "😍");
+                    element.end_tag = end_tag;
+
+                    Some(())
+                },
+            ),
+            (
+                &[r"No end tag"],
+                |re: &Regex, text: &str, element: &mut ParsedElement| {
+                    re.captures(text)?;
+
+                    let end_tag = false;
+                    tracing::trace!(element.name, end_tag, text, "😍");
+                    element.end_tag = end_tag;
 
                     Some(())
                 },

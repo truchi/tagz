@@ -24,7 +24,13 @@ pub struct ParsedElement {
     pub categories: HashSet<Category>,
     pub contexts: HashSet<CategoryOrElement>,
     pub contents: HashSet<CategoryOrElement>,
+    pub end_tag: bool,
 }
+
+// TODO Void elements: https://html.spec.whatwg.org/multipage/syntax.html#elements-2
+// TODO global attributes and event handlers: https://html.spec.whatwg.org/multipage/dom.html#global-attributes
+// TODO attributes: https://html.spec.whatwg.org/multipage/syntax.html#attributes-2
+// TODO HTMLElement IDL: https://html.spec.whatwg.org/multipage/dom.html#elements-in-the-dom
 
 #[derive(Debug)]
 pub enum Spec {}
@@ -138,6 +144,7 @@ impl Spec {
             categories: HashSet::new(),
             contexts: HashSet::new(),
             contents: HashSet::new(),
+            end_tag: true,
         };
         let mut section = Option::<Section>::None;
 
@@ -159,7 +166,9 @@ impl Spec {
                     Section::ContentModel => {
                         parser.content(&text, &mut element);
                     }
-                    Section::TagOmission => {}
+                    Section::TagOmission => {
+                        parser.tag_omission(&text, &mut element);
+                    }
                     Section::Attributes => {}
                     Section::Accessibility => {}
                     Section::DOM => {}
