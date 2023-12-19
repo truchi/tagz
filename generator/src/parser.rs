@@ -135,10 +135,14 @@ impl Parser {
         text: &str,
         element: &mut ParsedElement,
     ) {
-        // Collapse whitespace.
+        // Simplify:
+        // - Collapse whitespace
+        // - Trim whitespace
+        // - Trim ending period
+        // - Lowercase
         let re = Regex::new(r"\s+").unwrap();
         let text = re.replace_all(&text, " ");
-        let text = text.trim().trim_end_matches('.');
+        let text = &text.trim().trim_end_matches('.').to_lowercase();
 
         for ((index, parse), count) in counts {
             if parse(&regexes[*index], text, element).is_some() {
@@ -156,18 +160,18 @@ impl Parser {
                 r"(\S+) content",
                 r"(\S+) element",
                 r"(\S+) (\S+) element",
-                r"If the element is allowed in the body: (\S+) content",
-                r"If the element has an? \S+ attribute: (\S+) content",
-                r"If the element's children include at least one \S+ element: (\S+) content",
-                r"If the element's children include at least one \S+ group: (\S+) content",
-                r"If the \S+ attribute is present: (\S+) content",
-                r"If the \S+ attribute is in the \S+ state: (\S+), (\S+), (\S+), and (\S+) (\S+) element",
-                r"If the \S+ attribute is not in the \S+ state: (\S+) content",
-                r"If the \S+ attribute is not in the \S+ state: (\S+), (\S+), (\S+), (\S+), and (\S+) (\S+) element",
+                r"if the element is allowed in the body: (\S+) content",
+                r"if the element has an? \S+ attribute: (\S+) content",
+                r"if the element's children include at least one \S+ element: (\S+) content",
+                r"if the element's children include at least one \S+ group: (\S+) content",
+                r"if the \S+ attribute is present: (\S+) content",
+                r"if the \S+ attribute is in the \S+ state: (\S+), (\S+), (\S+), and (\S+) (\S+) element",
+                r"if the \S+ attribute is not in the \S+ state: (\S+) content",
+                r"if the \S+ attribute is not in the \S+ state: (\S+), (\S+), (\S+), (\S+), and (\S+) (\S+) element",
                 r"(\S+) and (\S+) (\S+) element",
                 r"(\S+), (\S+), (\S+), and (\S+) (\S+) element",
                 r"(\S+), (\S+), (\S+), (\S+), and (\S+) (\S+) element",
-                r"None",
+                r"none",
             ],
             |re: &Regex, text: &str, element: &mut ParsedElement| {
                 let captures = re.captures(text)?;
@@ -192,40 +196,40 @@ impl Parser {
         &[
             (
                 &[
-                    r"Inside (\S+) elements",
-                    r"Where (\S+) elements are expected",
-                    r"Where (\S+) content is expected",
-                    r"Where (\S+) content is expected, but only if there is an? \S+ element ancestor",
-                    r"Where (\S+) content is expected, but only if it is a hierarchically correct \S+ element",
-                    r"Where (\S+) content is expected in HTML documents, if there are no ancestor \S+ elements",
-                    r"As a child of an? (\S+) element",
-                    r"As a child of an? (\S+) element that doesn't have an? \S+ attribute",
-                    r"As a child of an? (\S+) element, before the \S+ element",
-                    r"As a child of an? (\S+) element, before any \S+ content",
-                    r"As a child of an? (\S+) element, before any \S+ content or \S+ elements",
-                    r"As a child of an? (\S+) element, after all \S+ elements",
-                    r"As a child of an? (\S+) element, after any \S+, \S+, and \S+ elements, but only if there are no \S+ elements that are children of the \S+ element",
-                    r"As a child of an? (\S+) element, after any \S+, \S+, \S+, \S+, and \S+ elements, but only if there are no other \S+ elements that are children of the \S+ element",
-                    r"As a child of an? (\S+) element, after any \S+ elements and before any \S+, \S+, \S+, and \S+ elements",
-                    r"As a child of an? (\S+) element, after any \S+, and \S+ elements and before any \S+, \S+, and \S+ elements, but only if there are no other \S+ elements that are children of the \S+ element",
-                    r"As a child of an? (\S+) element, either immediately before or immediately after an? \S+ element",
-                    r"As the first child of an? (\S+) element",
-                    r"As the first element in an? (\S+) element",
-                    r"As the first element child of an? (\S+) element",
-                    r"As the second element in an? (\S+) element",
-                    r"As the first or last child of an? (\S+) element",
-                    r"In an? (\S+) element that is a child of an? \S+ element",
-                    r"In an? (\S+) element containing no other \S+ elements",
-                    r"In an? (\S+) element of an HTML document, if there are no ancestor \S+ elements",
-                    r"If the \S+ attribute is present: where (\S+) content is expected",
-                    r"If the \S+ attribute is present but not in the \S+ declaration state: in an? (\S+) element",
-                    r"If the \S+ attribute is present but not in the \S+ declaration state: in an? (\S+) element that is a child of an? \S+ element",
-                    r"If the \S+ attribute is present, or if the element's \S+ attribute is in the \S+ declaration state: in an? (\S+) element",
-                    r"If the element is allowed in the body: where (\S+) content is expected",
-                    r"Before \S+ or \S+ elements inside (\S+) elements",
-                    r"After \S+ or \S+ elements inside (\S+) elements",
-                    r"Before \S+ or \S+ elements inside (\S+) elements that are children of an? \S+ element",
-                    r"After \S+ or \S+ elements inside (\S+) elements that are children of an? \S+ element",
+                    r"inside (\S+) elements",
+                    r"where (\S+) elements are expected",
+                    r"where (\S+) content is expected",
+                    r"where (\S+) content is expected, but only if there is an? \S+ element ancestor",
+                    r"where (\S+) content is expected, but only if it is a hierarchically correct \S+ element",
+                    r"where (\S+) content is expected in html documents, if there are no ancestor \S+ elements",
+                    r"as a child of an? (\S+) element",
+                    r"as a child of an? (\S+) element that doesn't have an? \S+ attribute",
+                    r"as a child of an? (\S+) element, before the \S+ element",
+                    r"as a child of an? (\S+) element, before any \S+ content",
+                    r"as a child of an? (\S+) element, before any \S+ content or \S+ elements",
+                    r"as a child of an? (\S+) element, after all \S+ elements",
+                    r"as a child of an? (\S+) element, after any \S+, \S+, and \S+ elements, but only if there are no \S+ elements that are children of the \S+ element",
+                    r"as a child of an? (\S+) element, after any \S+, \S+, \S+, \S+, and \S+ elements, but only if there are no other \S+ elements that are children of the \S+ element",
+                    r"as a child of an? (\S+) element, after any \S+ elements and before any \S+, \S+, \S+, and \S+ elements",
+                    r"as a child of an? (\S+) element, after any \S+, and \S+ elements and before any \S+, \S+, and \S+ elements, but only if there are no other \S+ elements that are children of the \S+ element",
+                    r"as a child of an? (\S+) element, either immediately before or immediately after an? \S+ element",
+                    r"as the first child of an? (\S+) element",
+                    r"as the first element in an? (\S+) element",
+                    r"as the first element child of an? (\S+) element",
+                    r"as the second element in an? (\S+) element",
+                    r"as the first or last child of an? (\S+) element",
+                    r"in an? (\S+) element that is a child of an? \S+ element",
+                    r"in an? (\S+) element containing no other \S+ elements",
+                    r"in an? (\S+) element of an html document, if there are no ancestor \S+ elements",
+                    r"if the \S+ attribute is present: where (\S+) content is expected",
+                    r"if the \S+ attribute is present but not in the \S+ declaration state: in an? (\S+) element",
+                    r"if the \S+ attribute is present but not in the \S+ declaration state: in an? (\S+) element that is a child of an? \S+ element",
+                    r"if the \S+ attribute is present, or if the element's \S+ attribute is in the \S+ declaration state: in an? (\S+) element",
+                    r"if the element is allowed in the body: where (\S+) content is expected",
+                    r"before \S+ or \S+ elements inside (\S+) elements",
+                    r"after \S+ or \S+ elements inside (\S+) elements",
+                    r"before \S+ or \S+ elements inside (\S+) elements that are children of an? \S+ element",
+                    r"after \S+ or \S+ elements inside (\S+) elements that are children of an? \S+ element",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     let captures = re.captures(text)?;
@@ -246,8 +250,8 @@ impl Parser {
             ),
             (
                 &[
-                    r"As document's document element",
-                    r"Wherever a subdocument fragment is allowed in a compound document",
+                    r"as document's document element",
+                    r"wherever a subdocument fragment is allowed in a compound document",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     re.captures(text)?;
@@ -281,38 +285,38 @@ impl Parser {
                     r"(\S+) that is not inter-element whitespace",
                     r"(\S+) that gives a conformant style sheet",
                     r"(\S+) \(for clarification, see example\)",
-                    r"If the \S+ attribute is present: (\S+)",
-                    r"If the \S+ attribute is absent: Zero or more (\S+) and (\S+) elements",
-                    r"If the element is not a child of an? \S+ element: (\S+) content",
-                    r"If the element has no \S+ attribute and is a child of an? \S+ element: (\S+)",
-                    r"If the element has no \S+ attribute and is not a child of an? \S+ element: (\S+) that is not inter-element whitespace",
-                    r"If the element has an? \S+ attribute: (\S+) content",
-                    r"If the element has an? \S+ attribute but no \S+ attribute: (\S+)",
-                    r"If the element has an? \S+ attribute: zero or more (\S+) elements, then (\S+), but with no \S+ element descendants",
-                    r"If the element does not have an? \S+ attribute: zero or more (\S+) elements, then zero or more (\S+) elements, then (\S+), but with no \S+ element descendants",
-                    r"If the element is a child of an? \S+ element: one or more (\S+) elements followed by one or more (\S+) elements, optionally intermixed with (\S+) elements",
-                    r"If the element has an? \S+ attribute and an? \S+ attribute: (\S+)",
-                    r"If the document is an? \S+ \S+ document or if \S+ information is available from a higher-level protocol: Zero or more elements of (\S+) content, of which no more than one is a (\S+) element and no more than one is a (\S+) element",
-                    r"In this order: optionally an? (\S+) element, followed by zero or more (\S+) elements, followed optionally by an? (\S+) element, followed by either zero or more (\S+) elements or one or more (\S+) elements, followed optionally by a (\S+) element, optionally intermixed with one or more (\S+) elements",
-                    r"A (\S+) element followed by a (\S+) element",
-                    r"One (\S+) element followed by (\S+) content",
-                    r"Optionally a (\S+) element, followed by (\S+) content",
-                    r"Zero or more (\S+) and (\S+) elements",
-                    r"Zero or more (\S+), (\S+), and (\S+) elements",
-                    r"Zero or more (\S+), (\S+), (\S+), and (\S+) elements",
-                    r"Zero or more (\S+) elements, followed by one (\S+) element, optionally intermixed with (\S+) elements",
-                    r"Zero or more (\S+) elements, followed by one (\S+), (\S+), (\S+), (\S+), (\S+), or (\S+) element, followed by zero or more (\S+) elements, optionally intermixed with (\S+) elements",
-                    r"Either: (\S+) content",
-                    r"Either: one (\S+) element followed by (\S+) content",
-                    r"Either: Zero or more groups each consisting of one or more (\S+) elements followed by one or more (\S+) elements, optionally intermixed with (\S+) elements",
-                    r"Or: Zero or more (\S+) and (\S+) elements",
-                    r"Or: (\S+) content",
-                    r"Or: (\S+) content followed by one (\S+) element",
-                    r"Or: One or more (\S+) elements, optionally intermixed with (\S+) elements",
-                    r"Otherwise: (\S+), but must match requirements described in \S+ below",
-                    r"Otherwise: One or more elements of (\S+) content, of which exactly one is a (\S+) element and no more than one is a (\S+) element",
-                    r"When scripting is disabled, not in an? \S+ element: (\S+), but there must be no \S+ element descendants",
-                    r"When scripting is disabled, in an? \S+ element: in any order, zero or more (\S+) elements, zero or more (\S+) elements, and zero or more (\S+) elements",
+                    r"if the \S+ attribute is present: (\S+)",
+                    r"if the \S+ attribute is absent: zero or more (\S+) and (\S+) elements",
+                    r"if the element is not a child of an? \S+ element: (\S+) content",
+                    r"if the element has no \S+ attribute and is a child of an? \S+ element: (\S+)",
+                    r"if the element has no \S+ attribute and is not a child of an? \S+ element: (\S+) that is not inter-element whitespace",
+                    r"if the element has an? \S+ attribute: (\S+) content",
+                    r"if the element has an? \S+ attribute but no \S+ attribute: (\S+)",
+                    r"if the element has an? \S+ attribute: zero or more (\S+) elements, then (\S+), but with no \S+ element descendants",
+                    r"if the element does not have an? \S+ attribute: zero or more (\S+) elements, then zero or more (\S+) elements, then (\S+), but with no \S+ element descendants",
+                    r"if the element is a child of an? \S+ element: one or more (\S+) elements followed by one or more (\S+) elements, optionally intermixed with (\S+) elements",
+                    r"if the element has an? \S+ attribute and an? \S+ attribute: (\S+)",
+                    r"if the document is an? \S+ \S+ document or if \S+ information is available from a higher-level protocol: zero or more elements of (\S+) content, of which no more than one is a (\S+) element and no more than one is a (\S+) element",
+                    r"in this order: optionally an? (\S+) element, followed by zero or more (\S+) elements, followed optionally by an? (\S+) element, followed by either zero or more (\S+) elements or one or more (\S+) elements, followed optionally by a (\S+) element, optionally intermixed with one or more (\S+) elements",
+                    r"a (\S+) element followed by a (\S+) element",
+                    r"one (\S+) element followed by (\S+) content",
+                    r"optionally a (\S+) element, followed by (\S+) content",
+                    r"zero or more (\S+) and (\S+) elements",
+                    r"zero or more (\S+), (\S+), and (\S+) elements",
+                    r"zero or more (\S+), (\S+), (\S+), and (\S+) elements",
+                    r"zero or more (\S+) elements, followed by one (\S+) element, optionally intermixed with (\S+) elements",
+                    r"zero or more (\S+) elements, followed by one (\S+), (\S+), (\S+), (\S+), (\S+), or (\S+) element, followed by zero or more (\S+) elements, optionally intermixed with (\S+) elements",
+                    r"either: (\S+) content",
+                    r"either: one (\S+) element followed by (\S+) content",
+                    r"either: zero or more groups each consisting of one or more (\S+) elements followed by one or more (\S+) elements, optionally intermixed with (\S+) elements",
+                    r"or: zero or more (\S+) and (\S+) elements",
+                    r"or: (\S+) content",
+                    r"or: (\S+) content followed by one (\S+) element",
+                    r"or: one or more (\S+) elements, optionally intermixed with (\S+) elements",
+                    r"otherwise: (\S+), but must match requirements described in \S+ below",
+                    r"otherwise: one or more elements of (\S+) content, of which exactly one is a (\S+) element and no more than one is a (\S+) element",
+                    r"when scripting is disabled, not in an? \S+ element: (\S+), but there must be no \S+ element descendants",
+                    r"when scripting is disabled, in an? \S+ element: in any order, zero or more (\S+) elements, zero or more (\S+) elements, and zero or more (\S+) elements",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     let captures = re.captures(text)?;
@@ -333,8 +337,8 @@ impl Parser {
             ),
             (
                 &[
-                    r"If there is no \S+ attribute, depends on the value of the \S+ attribute, but must match script content restrictions",
-                    r"If there is an? \S+ attribute, the element must be either empty or contain only script documentation that also matches script content restrictions",
+                    r"if there is no \S+ attribute, depends on the value of the \S+ attribute, but must match script content restrictions",
+                    r"if there is an? \S+ attribute, the element must be either empty or contain only script documentation that also matches script content restrictions",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     re.captures(text)?;
@@ -345,7 +349,7 @@ impl Parser {
                 },
             ),
             (
-                &[r"Otherwise: text that conforms to the requirements given in the prose"],
+                &[r"otherwise: text that conforms to the requirements given in the prose"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     re.captures(text)?;
                     assert_eq!(element.name, "noscript");
@@ -356,7 +360,7 @@ impl Parser {
             ),
             (
                 // TODO: Read the prose for <ruby>
-                &[r"See prose"],
+                &[r"see prose"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     re.captures(text)?;
                     assert_eq!(element.name, "ruby");
@@ -372,8 +376,8 @@ impl Parser {
         &[
             (
                 &[
-                    r"Neither tag is omissible",
-                    r"An? \S+ element's start|end tag can be omitted if .*",
+                    r"neither tag is omissible",
+                    r"an? \S+ element's start|end tag can be omitted if .*",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     re.captures(text)?;
@@ -386,7 +390,7 @@ impl Parser {
                 },
             ),
             (
-                &[r"No end tag"],
+                &[r"no end tag"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     re.captures(text)?;
                     let end_tag = false;
@@ -403,7 +407,7 @@ impl Parser {
     fn attribute_parsers() -> &'static [(&'static [&'static str], Parse)] {
         &[
             (
-                &[r"Global attributes"],
+                &[r"global attributes"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     re.captures(text)?;
                     let global_attributes = true;
@@ -420,7 +424,7 @@ impl Parser {
                     r"(\S+) — (.*)",
                     r"(\S+) \(in \S+\) — (.*)",
                     r"(\S+) \(in \S+ or \S+\) — (.*)",
-                    r"If the element is not a child of an \S+ or \S+ element: (\S+) — (.*)",
+                    r"if the element is not a child of an \S+ or \S+ element: (\S+) — (.*)",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     let captures = re.captures(text)?;
@@ -439,9 +443,9 @@ impl Parser {
             ),
             (
                 &[
-                    r"Also, the \S+ attribute has special semantics on this element: .*",
-                    r"Also, the \S+ global attribute has special semantics on this element",
-                    r"Any other attribute that has no namespace \(see prose\)",
+                    r"also, the \S+ attribute has special semantics on this element: .*",
+                    r"also, the \S+ global attribute has special semantics on this element",
+                    r"any other attribute that has no namespace \(see prose\)",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     re.captures(text)?;
