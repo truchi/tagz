@@ -11,6 +11,7 @@ pub struct Parser {
     context: Counts,
     content: Counts,
     tag_omission: Counts,
+    attribute: Counts,
     regexes: Vec<Regex>,
 }
 
@@ -21,6 +22,7 @@ impl Parser {
             context: HashMap::new(),
             content: HashMap::new(),
             tag_omission: HashMap::new(),
+            attribute: HashMap::new(),
             regexes: Vec::new(),
         };
 
@@ -45,6 +47,9 @@ impl Parser {
         }
         for (res, f) in Self::tag_omission_parsers() {
             push(res, *f, &mut parser.tag_omission);
+        }
+        for (res, f) in Self::attribute_parsers() {
+            push(res, *f, &mut parser.attribute);
         }
 
         parser
@@ -90,6 +95,16 @@ impl Parser {
         );
     }
 
+    pub fn attribute(&mut self, text: &str, element: &mut ParsedElement) {
+        Self::parse(
+            "attribute",
+            &mut self.attribute,
+            &mut self.regexes,
+            text,
+            element,
+        );
+    }
+
     pub fn errors(&self) {
         let errors = |name: &str, counts: &Counts| {
             for ((index, _), count) in counts {
@@ -107,6 +122,7 @@ impl Parser {
         errors("context", &self.context);
         errors("content", &self.content);
         errors("tag_omission", &self.tag_omission);
+        errors("attribute", &self.attribute);
     }
 }
 
@@ -361,9 +377,9 @@ impl Parser {
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     re.captures(text)?;
-
                     let end_tag = true;
                     tracing::trace!(element.name, end_tag, text, "😍");
+
                     element.end_tag = end_tag;
 
                     Some(())
@@ -373,10 +389,63 @@ impl Parser {
                 &[r"No end tag"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     re.captures(text)?;
-
                     let end_tag = false;
                     tracing::trace!(element.name, end_tag, text, "😍");
+
                     element.end_tag = end_tag;
+
+                    Some(())
+                },
+            ),
+        ]
+    }
+
+    fn attribute_parsers() -> &'static [(&'static [&'static str], Parse)] {
+        &[
+            (
+                &[r"Global attributes"],
+                |re: &Regex, text: &str, element: &mut ParsedElement| {
+                    re.captures(text)?;
+                    let global_attributes = true;
+                    tracing::trace!(element.name, global_attributes, text, "😍");
+
+                    element.global_attributes = global_attributes;
+
+                    Some(())
+                },
+            ),
+            (
+                &[
+                    r"(\S+)",
+                    r"(\S+) — (.*)",
+                    r"(\S+) \(in \S+\) — (.*)",
+                    r"(\S+) \(in \S+ or \S+\) — (.*)",
+                    r"If the element is not a child of an \S+ or \S+ element: (\S+) — (.*)",
+                ],
+                |re: &Regex, text: &str, element: &mut ParsedElement| {
+                    let captures = re.captures(text)?;
+                    let name = captures.get(1).unwrap().as_str().to_string();
+                    let description = captures
+                        .get(2)
+                        .map(|description| description.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    tracing::trace!(element.name, name, description, text, "😍");
+
+                    element.attributes.insert(name, description);
+
+                    Some(())
+                },
+            ),
+            (
+                &[
+                    r"Also, the \S+ attribute has special semantics on this element: .*",
+                    r"Also, the \S+ global attribute has special semantics on this element",
+                    r"Any other attribute that has no namespace \(see prose\)",
+                ],
+                |re: &Regex, text: &str, element: &mut ParsedElement| {
+                    re.captures(text)?;
+                    tracing::trace!(element.name, text, "😍");
 
                     Some(())
                 },

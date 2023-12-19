@@ -2,7 +2,7 @@ use crate::{parser::Parser, Category, CategoryOrElement};
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs::{create_dir_all, read_dir, read_to_string, write},
     ops::Range,
     process::Command,
@@ -25,6 +25,8 @@ pub struct ParsedElement {
     pub contexts: HashSet<CategoryOrElement>,
     pub contents: HashSet<CategoryOrElement>,
     pub end_tag: bool,
+    pub global_attributes: bool,
+    pub attributes: HashMap</* name: */ String, /* description: */ String>,
 }
 
 // TODO Void elements: https://html.spec.whatwg.org/multipage/syntax.html#elements-2
@@ -145,6 +147,8 @@ impl Spec {
             contexts: HashSet::new(),
             contents: HashSet::new(),
             end_tag: true,
+            global_attributes: true,
+            attributes: HashMap::new(),
         };
         let mut section = Option::<Section>::None;
 
@@ -169,7 +173,9 @@ impl Spec {
                     Section::TagOmission => {
                         parser.tag_omission(&text, &mut element);
                     }
-                    Section::Attributes => {}
+                    Section::Attributes => {
+                        parser.attribute(&text, &mut element);
+                    }
                     Section::Accessibility => {}
                     Section::DOM => {}
                 },
