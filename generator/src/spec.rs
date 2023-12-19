@@ -1,5 +1,4 @@
 use crate::{parser::Parser, Category, CategoryOrElement};
-use regex::Regex;
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -24,7 +23,7 @@ pub struct ParsedElement {
     pub name: String,
     pub categories: HashSet<Category>,
     pub contexts: HashSet<CategoryOrElement>,
-    pub content: HashSet<CategoryOrElement>,
+    pub contents: HashSet<CategoryOrElement>,
 }
 
 #[derive(Debug)]
@@ -60,11 +59,6 @@ impl Spec {
             let mut scraped = Self::read_scraped();
             scraped.sort_by_key(|(_, name, _)| name.clone());
             scraped
-                // TODO REMOVE
-                .into_iter()
-                // .skip(5) // <- ;)
-                // .take(5)
-                .collect::<Vec<_>>()
         };
         let mut parser = Parser::new();
 
@@ -138,36 +132,17 @@ impl Spec {
             }
         }
 
-        fn parse_categories(text: &str, element: &ElementRef, categories: &mut HashSet<Category>) {
-            let re = Regex::new(r"^(\S+)\s+content.$").unwrap();
-            let mut matched = false;
-
-            for (substring, [category]) in re.captures_iter(text).map(|c| c.extract()) {
-                assert!(substring == text);
-                // dbg!((substring, category));
-
-                categories.insert(Category::from_str(category).unwrap());
-                matched = true;
-            }
-
-            assert!(matched, "{text}");
-        }
-
         let mut element = ParsedElement {
             id: id.to_owned(),
             name: name.to_owned(),
             categories: HashSet::new(),
             contexts: HashSet::new(),
-            content: HashSet::new(),
+            contents: HashSet::new(),
         };
         let mut section = Option::<Section>::None;
 
         for d in definition.select(&selector!("dt, dd")) {
-            // Collapse whitespace.
-            let re = Regex::new(r"\s+").unwrap();
             let text = d.text().collect::<String>();
-            let text = re.replace_all(&text, " ");
-            let text = text.trim();
 
             match d.value().name() {
                 "dt" => {
@@ -193,7 +168,7 @@ impl Spec {
             }
         }
 
-        // dbg!(&element);
+        Self::write_parsed(&element);
     }
 }
 
@@ -216,7 +191,7 @@ impl Spec {
     }
 
     fn parsed_file(name: &str) -> String {
-        format!("{}/{}.html", Self::parsed_dir(), name)
+        format!("{}/{}.json", Self::parsed_dir(), name)
     }
 
     pub fn write_fetched(html: &Html) {
@@ -273,6 +248,17 @@ impl Spec {
                 ))
             })
             .collect()
+    }
+
+    pub fn write_parsed(element: &ParsedElement) {
+        tracing::debug!("WRITING {}", Self::parsed_file(&element.name));
+
+        create_dir_all(Self::parsed_dir()).unwrap();
+        write(
+            Self::parsed_file(&element.name),
+            serde_json::to_string_pretty(element).unwrap(),
+        )
+        .unwrap();
     }
 }
 

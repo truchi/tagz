@@ -33,19 +33,10 @@ pub enum Category {
     Nothing,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
-pub enum CategoryOrElement {
-    Category(Category),
-    Element(String),
-}
-
 impl FromStr for Category {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // .trim_end_matches("content")
-        // .trim_end_matches("elements")
-        // .trim_end_matches("element")
         match s
             .trim()
             .to_lowercase()
@@ -74,6 +65,21 @@ impl FromStr for Category {
             "transparent" => Ok(Self::Transparent),
             "nothing" => Ok(Self::Nothing),
             _ => Err(()),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+pub enum CategoryOrElement {
+    Category(Category),
+    Element(String),
+}
+
+impl From<&str> for CategoryOrElement {
+    fn from(s: &str) -> Self {
+        match Category::from_str(s) {
+            Ok(category) => Self::Category(category),
+            Err(_) => Self::Element(s.to_string()),
         }
     }
 }
