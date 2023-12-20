@@ -1,6 +1,7 @@
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use weedle::{interface::*, mixin::*, *};
 
 use crate::{AttributeType, Category, CategoryOrElement};
 
@@ -496,10 +497,9 @@ impl Parser {
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     re.captures(&Self::simplify(text))?;
 
-                    ParsedInterface::parse(text).map(|interface| {
-                        tracing::debug!(element.name, "😍");
-                        element.idl = UsesOrParsedInterface::ParsedIdl(interface);
-                    })
+                    tracing::debug!(element.name, "😍");
+                    element.idl = UsesOrParsedInterface::ParsedIdl(ParsedInterface::parse(text));
+                    Some(())
                 },
             ),
         ]
@@ -529,15 +529,13 @@ pub enum UsesOrParsedInterface {
 pub struct ParsedInterface {
     pub name: String,
     pub inherits: Option<String>,
-    pub attributes: HashMap<String, AttributeType>,
+    pub attributes: HashMap</* name: */ String, AttributeType>,
 }
 
 impl ParsedInterface {
     // TODO: "... includes ..." for more attributes, maybe events.
-    pub fn parse(text: &str) -> Option<Self> {
-        use weedle::{interface::*, *};
-
-        let definitions = parse(&text).unwrap();
+    pub fn parse(text: &str) -> Self {
+        let definitions = weedle::parse(&text).unwrap();
         let mut interfaces = definitions
             .iter()
             .filter_map(|definition| match definition {
@@ -547,6 +545,108 @@ impl ParsedInterface {
         let interface = interfaces.next().unwrap();
         assert!(interfaces.next().is_none());
 
+        ParsedIdl::parse_interface(interface)
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ParsedIdl {
+    pub interfaces: HashMap</* name: */ String, ParsedInterface>,
+    pub mixins: HashMap</* name: */ String, ParsedInterface>,
+    pub includes: HashMap</* left: */ String, /* right: */ HashSet<String>>,
+}
+
+impl ParsedIdl {
+    pub fn parse(text: &str) -> Self {
+        let definitions = weedle::parse(&text).unwrap();
+
+        definitions.iter().for_each(|definition| match definition {
+            // We only care about interfaces, mixins, and includes.
+            Definition::Interface(_) => {}
+            Definition::InterfaceMixin(_) => {}
+            Definition::IncludesStatement(_) => {}
+            // We could care about those, but don't.
+            // ("... : ..." and "... includes ..." don't reference partial definitions)
+            Definition::PartialInterface(_) => {}
+            Definition::PartialInterfaceMixin(_) => {}
+            // We don't care about these.
+            Definition::Callback(_) => {}
+            Definition::Dictionary(_) => {}
+            Definition::Enum(_) => {}
+            Definition::Typedef(_) => {}
+            // Those are not found in the spec.
+            Definition::CallbackInterface(_) => unreachable!(),
+            Definition::Namespace(_) => unreachable!(),
+            Definition::PartialDictionary(_) => unreachable!(),
+            Definition::PartialNamespace(_) => unreachable!(),
+            Definition::Implements(_) => unreachable!(),
+        });
+
+        let interfaces = definitions
+            .iter()
+            .filter_map(|definition| match definition {
+                Definition::Interface(interface) => Some(interface),
+                _ => None,
+            })
+            .map(|interface| Self::parse_interface(interface))
+            .map(|interface| (interface.name.clone(), interface))
+            .fold(HashMap::new(), |mut map, (name, interface)| {
+                assert!(map.insert(name, interface).is_none());
+                map
+            });
+        let mixins = definitions
+            .iter()
+            .filter_map(|definition| match definition {
+                Definition::InterfaceMixin(mixin) => Some(mixin),
+                _ => None,
+            })
+            .map(|mixin| Self::parse_mixin(mixin))
+            .map(|mixin| (mixin.name.clone(), mixin))
+            .fold(HashMap::new(), |mut map, (name, mixin)| {
+                assert!(map.insert(name, mixin).is_none());
+                map
+            });
+        let includes = definitions
+            .iter()
+            .filter_map(|definition| match definition {
+                Definition::IncludesStatement(includes) => Some(includes),
+                _ => None,
+            })
+            .map(|includes| Self::parse_includes(includes))
+            .fold(
+                HashMap::<String, HashSet<String>>::new(),
+                |mut map, (left, right)| {
+                    assert!(map.entry(left).or_default().insert(right));
+                    map
+                },
+            );
+
+        for interface in interfaces.values() {
+            let name = &interface.name;
+
+            if let Some(includes) = includes.get(&interface.name) {
+                for include in includes {
+                    if !mixins.contains_key(include) {
+                        tracing::trace!("😓 {name} includes {include}");
+                    }
+                }
+            }
+
+            if let Some(inherits) = interface.inherits.as_ref() {
+                if !interfaces.contains_key(inherits) {
+                    tracing::trace!("😓 {name} : {inherits}");
+                }
+            }
+        }
+
+        Self {
+            interfaces,
+            mixins,
+            includes,
+        }
+    }
+
+    fn parse_interface(interface: &InterfaceDefinition) -> ParsedInterface {
         let name = interface.identifier.0.to_string();
         let inherits = interface
             .inheritance
@@ -555,26 +655,48 @@ impl ParsedInterface {
             .members
             .body
             .iter()
-            .filter_map(|member| {
-                if let InterfaceMember::Attribute(attribute) = member {
-                    Some(attribute)
-                } else {
-                    None
-                }
-            })
-            .filter(|attribute| attribute.readonly.is_none())
-            .filter_map(|attribute| {
-                Some((
+            .filter_map(|member| match member {
+                InterfaceMember::Attribute(attribute) => Some((
                     attribute.identifier.0.to_string(),
-                    AttributeType::try_from(attribute).ok()?,
-                ))
+                    AttributeType::try_from(&attribute.type_.type_).ok()?,
+                )),
+                _ => None,
             })
             .collect();
 
-        Some(Self {
+        ParsedInterface {
             name,
             inherits,
             attributes,
-        })
+        }
+    }
+
+    fn parse_mixin(interface: &InterfaceMixinDefinition) -> ParsedInterface {
+        let name = interface.identifier.0.to_string();
+        let attributes = interface
+            .members
+            .body
+            .iter()
+            .filter_map(|member| match member {
+                MixinMember::Attribute(attribute) => Some((
+                    attribute.identifier.0.to_string(),
+                    AttributeType::try_from(&attribute.type_.type_).ok()?,
+                )),
+                _ => None,
+            })
+            .collect();
+
+        ParsedInterface {
+            name,
+            inherits: None,
+            attributes,
+        }
+    }
+
+    fn parse_includes(includes: &IncludesStatementDefinition) -> (String, String) {
+        (
+            includes.lhs_identifier.0.to_string(),
+            includes.rhs_identifier.0.to_string(),
+        )
     }
 }

@@ -1,4 +1,4 @@
-use crate::parser::{ParsedElement, Parser, UsesOrParsedInterface};
+use crate::parser::{ParsedElement, ParsedIdl, ParsedInterface, Parser, UsesOrParsedInterface};
 use scraper::{ElementRef, Html};
 use std::{
     collections::{HashMap, HashSet},
@@ -43,7 +43,7 @@ impl Spec {
         let html = Self::read_fetched();
 
         let elements = Self::parse_elements(&html).await;
-        dbg!(elements);
+        let interfaces = Self::parse_interfaces(&html).await;
     }
 }
 
@@ -152,6 +152,23 @@ impl Spec {
 
         parser.errors();
         elements
+    }
+
+    async fn parse_interfaces(html: &Html) -> Vec<ParsedInterface> {
+        let idl = html
+            .select(&selector!("code.idl"))
+            .map(|idl| {
+                idl.text()
+                    .collect::<String>()
+                    .trim_start_matches("[Exposed=*]") // `weedle` chokes on this
+                    .to_owned()
+            })
+            .collect::<String>();
+
+        let idl = ParsedIdl::parse(&idl);
+        dbg!(&idl);
+
+        todo!("OK")
     }
 }
 

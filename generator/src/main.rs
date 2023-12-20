@@ -1,4 +1,3 @@
-mod idl;
 mod parser;
 mod spec;
 
@@ -98,22 +97,20 @@ pub enum AttributeType {
     F64,
     String,
 
-    BoolOrF64OrString, // TODO collect all code.idl, parse and resolve
+    BoolOrF64OrString,
 }
 
-impl<'a> TryFrom<&weedle::interface::AttributeInterfaceMember<'a>> for AttributeType {
+impl<'a> TryFrom<&weedle::types::Type<'a>> for AttributeType {
     type Error = ();
 
-    fn try_from(
-        attribute: &weedle::interface::AttributeInterfaceMember,
-    ) -> Result<Self, Self::Error> {
+    fn try_from(ty: &weedle::types::Type<'a>) -> Result<Self, Self::Error> {
         use weedle::types::*;
 
-        match &attribute.type_.type_ {
+        match ty {
             Type::Single(ty) => match ty {
                 SingleType::NonAny(ty) => ty.try_into(),
-                SingleType::Any(any) => {
-                    tracing::error!(?any);
+                SingleType::Any(_) => {
+                    tracing::trace!("Ignoring SingleType::Any");
                     return Err(());
                 }
             },
@@ -124,7 +121,7 @@ impl<'a> TryFrom<&weedle::interface::AttributeInterfaceMember<'a>> for Attribute
                 .iter()
                 .filter_map(|ty| match ty {
                     UnionMemberType::Single(ty) => AttributeType::try_from(&ty.type_).ok(),
-                    _ => panic!(),
+                    _ => unreachable!(),
                 })
                 .collect::<Vec<_>>()
                 .try_into(),
@@ -170,9 +167,18 @@ impl<'a> TryFrom<&weedle::types::NonAnyType<'a>> for AttributeType {
             },
             NonAnyType::USVString(_) => AttributeType::String,
             NonAnyType::DOMString(_) => AttributeType::String,
-            NonAnyType::Object(_) => return Err(()),
-            NonAnyType::Identifier(_) => return Err(()),
-            _ => panic!(),
+            NonAnyType::Object(_) => {
+                tracing::trace!("Ignoring NonAnyType::Object");
+                return Err(());
+            }
+            NonAnyType::Identifier(_) => {
+                tracing::trace!("Ignoring NonAnyType::Identifier");
+                return Err(());
+            }
+            ty => {
+                tracing::trace!(?ty, "Ignoring NonAnyType::_");
+                return Err(());
+            }
         })
     }
 }
@@ -192,7 +198,10 @@ impl TryFrom<Vec<Self>> for AttributeType {
 
         match types {
             types if types == bool_or_f64_or_string => Ok(AttributeType::BoolOrF64OrString),
-            _ => Err(()),
+            types => {
+                tracing::trace!(?types, "Unknown types");
+                Err(())
+            }
         }
     }
 }
