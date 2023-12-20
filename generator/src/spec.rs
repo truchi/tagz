@@ -1,4 +1,4 @@
-use crate::parser::{ParsedElement, ParsedIdl, ParsedInterface, Parser, UsesOrParsedInterface};
+use crate::parser::{ParsedElement, ParsedIdl, ParsedInterface, Parser};
 use scraper::{ElementRef, Html};
 use std::{
     collections::{HashMap, HashSet},
@@ -44,6 +44,9 @@ impl Spec {
 
         let elements = Self::parse_elements(&html).await;
         let interfaces = Self::parse_interfaces(&html).await;
+
+        dbg!(&elements);
+        dbg!(&interfaces);
     }
 }
 
@@ -60,7 +63,6 @@ impl Spec {
                 }
 
                 Some((
-                    h4.value().attr("id")?,
                     h4.select(&selector!("dfn[data-dfn-type=\"element\"] > code"))
                         .map(|code| code.inner_html())
                         .collect::<Vec<_>>(),
@@ -69,26 +71,10 @@ impl Spec {
                         .find(|element| selector!("dl.element").matches(element))?,
                 ))
             })
-            .flat_map(|(id, names, definition)| {
-                names
-                    .into_iter()
-                    .map(move |name| (id.to_owned(), name, definition))
-            })
-            .map(|(id, name, definition)| {
-                #[derive(Copy, Clone, Debug)]
-                enum Section {
-                    Categories,
-                    Contexts,
-                    ContentModel,
-                    TagOmission,
-                    Attributes,
-                    Accessibility,
-                    DOM,
-                }
-
+            .flat_map(|(names, definition)| names.into_iter().map(move |name| (name, definition)))
+            .map(|(name, definition)| {
                 let mut section = None;
                 let mut element = ParsedElement {
-                    id: id.to_owned(),
                     name: name.to_owned(),
                     categories: HashSet::new(),
                     contexts: HashSet::new(),
@@ -96,7 +82,7 @@ impl Spec {
                     end_tag: true,
                     global_attributes: true,
                     attributes: HashMap::new(),
-                    idl: UsesOrParsedInterface::Uses(String::from("__INVALID__")),
+                    interface: String::from("__INVALID__"),
                 };
 
                 for d in definition.select(&selector!("dt, dd")) {
@@ -105,35 +91,26 @@ impl Spec {
                     match d.value().name() {
                         "dt" => {
                             let str = d.select(&selector!("a")).next().unwrap().inner_html();
-                            section = Some(match str.to_lowercase().replace(' ', "").as_str() {
-                                "categories" => Section::Categories,
-                                "contextsinwhichthiselementcanbeused" => Section::Contexts,
-                                "contentmodel" => Section::ContentModel,
-                                "tagomissionintext/html" => Section::TagOmission,
-                                "contentattributes" => Section::Attributes,
-                                "accessibilityconsiderations" => Section::Accessibility,
-                                "dominterface" => Section::DOM,
-                                _ => panic!(),
-                            });
+                            section = Some(str.to_lowercase().replace(' ', ""));
                         }
-                        "dd" => match section.unwrap() {
-                            Section::Categories => {
+                        "dd" => match section.as_ref().unwrap().as_str() {
+                            "categories" => {
                                 parser.category(&text, &mut element);
                             }
-                            Section::Contexts => {
+                            "contextsinwhichthiselementcanbeused" => {
                                 parser.context(&text, &mut element);
                             }
-                            Section::ContentModel => {
+                            "contentmodel" => {
                                 parser.content(&text, &mut element);
                             }
-                            Section::TagOmission => {
+                            "tagomissionintext/html" => {
                                 parser.tag_omission(&text, &mut element);
                             }
-                            Section::Attributes => {
+                            "contentattributes" => {
                                 parser.attribute(&text, &mut element);
                             }
-                            Section::Accessibility => {}
-                            Section::DOM => {
+                            "accessibilityconsiderations" => {}
+                            "dominterface" => {
                                 let text = d
                                     .select(&selector!("pre"))
                                     .next()
@@ -141,8 +118,9 @@ impl Spec {
                                     .unwrap_or(text);
                                 parser.idl(&text, &mut element);
                             }
+                            _ => unreachable!(),
                         },
-                        _ => panic!(),
+                        _ => unreachable!(),
                     }
                 }
 
@@ -168,7 +146,7 @@ impl Spec {
         let idl = ParsedIdl::parse(&idl);
         dbg!(&idl);
 
-        todo!("OK")
+        vec![]
     }
 }
 

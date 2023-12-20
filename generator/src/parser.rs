@@ -1,16 +1,14 @@
+use crate::AttributeType;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use weedle::{interface::*, mixin::*, *};
-
-use crate::{AttributeType, Category, CategoryOrElement};
 
 type Parse = fn(&Regex, &str, &mut ParsedElement) -> Option<()>;
 type Counts = HashMap<(usize, Parse), usize>;
 
 #[derive(Debug)]
 pub struct Parser {
-    categories: Counts,
+    category: Counts,
     context: Counts,
     content: Counts,
     tag_omission: Counts,
@@ -22,7 +20,7 @@ pub struct Parser {
 impl Parser {
     pub fn new() -> Self {
         let mut parser = Self {
-            categories: HashMap::new(),
+            category: HashMap::new(),
             context: HashMap::new(),
             content: HashMap::new(),
             tag_omission: HashMap::new(),
@@ -42,7 +40,7 @@ impl Parser {
         };
 
         for (res, f) in Self::category_parsers() {
-            push(res, *f, &mut parser.categories);
+            push(res, *f, &mut parser.category);
         }
         for (res, f) in Self::context_parsers() {
             push(res, *f, &mut parser.context);
@@ -66,7 +64,7 @@ impl Parser {
     pub fn category(&mut self, text: &str, element: &mut ParsedElement) {
         Self::parse(
             "category",
-            &mut self.categories,
+            &mut self.category,
             &mut self.regexes,
             text,
             element,
@@ -130,7 +128,7 @@ impl Parser {
             }
         };
 
-        errors("categories", &self.categories);
+        errors("categories", &self.category);
         errors("context", &self.context);
         errors("content", &self.content);
         errors("tag_omission", &self.tag_omission);
@@ -193,12 +191,11 @@ impl Parser {
                     .iter()
                     .skip(1)
                     .map(|capture| capture.unwrap().as_str())
-                    .map(|capture| capture.parse().unwrap())
                     .collect::<Vec<_>>();
 
                 tracing::debug!(element.name, ?categories, text, "😍");
                 for category in categories {
-                    element.categories.insert(category);
+                    element.categories.insert(category.to_owned());
                 }
 
                 Some(())
@@ -252,12 +249,11 @@ impl Parser {
                         .iter()
                         .skip(1)
                         .map(|capture| capture.unwrap().as_str())
-                        .map(|capture| capture.into())
                         .collect::<Vec<_>>();
 
                     tracing::trace!(element.name, ?contexts, text, "😍");
                     for context in contexts {
-                        element.contexts.insert(context);
+                        element.contexts.insert(context.to_owned());
                     }
 
                     Some(())
@@ -341,12 +337,11 @@ impl Parser {
                         .iter()
                         .skip(1)
                         .map(|capture| capture.unwrap().as_str())
-                        .map(|capture| capture.into())
                         .collect::<Vec<_>>();
 
                     tracing::trace!(element.name, ?contents, text, "😍");
                     for content in contents {
-                        element.contents.insert(content);
+                        element.contents.insert(content.to_owned());
                     }
 
                     Some(())
@@ -481,24 +476,31 @@ impl Parser {
     fn idl_parsers() -> &'static [(&'static [&'static str], Parse)] {
         &[
             (
-                &[r"uses? (\S+)", r"uses (\S+), as defined for \S+ elements"],
+                &[r"Uses? (\S+)", r"Uses (\S+), as defined for \S+ elements\."],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = Self::simplify(text);
+                    // We don't simplify here to capture case.
                     let captures = re.captures(&text)?;
                     let uses = captures[1].to_string();
 
                     tracing::debug!(element.name, uses, text, "😍");
-                    element.idl = UsesOrParsedInterface::Uses(uses);
+                    element.interface = uses;
                     Some(())
                 },
             ),
             (
                 &[r"\[exposed=window.*", r"typedef .*"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
+                    // We only simplify the haystack here, parsing needs original text.
                     re.captures(&Self::simplify(text))?;
 
                     tracing::debug!(element.name, "😍");
-                    element.idl = UsesOrParsedInterface::ParsedIdl(ParsedInterface::parse(text));
+                    element.interface = ParsedIdl::parse(text)
+                        .interfaces
+                        .values()
+                        .next()
+                        .unwrap()
+                        .name
+                        .clone();
                     Some(())
                 },
             ),
@@ -506,50 +508,26 @@ impl Parser {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug)]
 pub struct ParsedElement {
-    pub id: String,
     pub name: String,
-    pub categories: HashSet<Category>,
-    pub contexts: HashSet<CategoryOrElement>,
-    pub contents: HashSet<CategoryOrElement>,
+    pub categories: HashSet<String>,
+    pub contexts: HashSet<String>,
+    pub contents: HashSet<String>,
     pub end_tag: bool,
     pub global_attributes: bool,
     pub attributes: HashMap</* name: */ String, /* description: */ String>,
-    pub idl: UsesOrParsedInterface,
+    pub interface: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub enum UsesOrParsedInterface {
-    Uses(String),
-    ParsedIdl(ParsedInterface),
-}
-
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug)]
 pub struct ParsedInterface {
     pub name: String,
     pub inherits: Option<String>,
     pub attributes: HashMap</* name: */ String, AttributeType>,
 }
 
-impl ParsedInterface {
-    // TODO: "... includes ..." for more attributes, maybe events.
-    pub fn parse(text: &str) -> Self {
-        let definitions = weedle::parse(&text).unwrap();
-        let mut interfaces = definitions
-            .iter()
-            .filter_map(|definition| match definition {
-                Definition::Interface(interface) => Some(interface),
-                _ => None,
-            });
-        let interface = interfaces.next().unwrap();
-        assert!(interfaces.next().is_none());
-
-        ParsedIdl::parse_interface(interface)
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug)]
 pub struct ParsedIdl {
     pub interfaces: HashMap</* name: */ String, ParsedInterface>,
     pub mixins: HashMap</* name: */ String, ParsedInterface>,
@@ -567,6 +545,7 @@ impl ParsedIdl {
             Definition::IncludesStatement(_) => {}
             // We could care about those, but don't.
             // ("... : ..." and "... includes ..." don't reference partial definitions)
+            // (from this spec, at least)
             Definition::PartialInterface(_) => {}
             Definition::PartialInterfaceMixin(_) => {}
             // We don't care about these.
@@ -621,6 +600,8 @@ impl ParsedIdl {
                 },
             );
 
+        // Are wwe complete?
+        // Fow now, we only miss interfaces/mixins defined in other specifcations.
         for interface in interfaces.values() {
             let name = &interface.name;
 
@@ -647,49 +628,42 @@ impl ParsedIdl {
     }
 
     fn parse_interface(interface: &InterfaceDefinition) -> ParsedInterface {
-        let name = interface.identifier.0.to_string();
-        let inherits = interface
-            .inheritance
-            .map(|parent| parent.identifier.0.to_string());
-        let attributes = interface
-            .members
-            .body
-            .iter()
-            .filter_map(|member| match member {
-                InterfaceMember::Attribute(attribute) => Some((
-                    attribute.identifier.0.to_string(),
-                    AttributeType::try_from(&attribute.type_.type_).ok()?,
-                )),
-                _ => None,
-            })
-            .collect();
-
         ParsedInterface {
-            name,
-            inherits,
-            attributes,
+            name: interface.identifier.0.to_string(),
+            inherits: interface
+                .inheritance
+                .map(|parent| parent.identifier.0.to_string()),
+            attributes: interface
+                .members
+                .body
+                .iter()
+                .filter_map(|member| match member {
+                    InterfaceMember::Attribute(attribute) => Some((
+                        attribute.identifier.0.to_string(),
+                        AttributeType::try_from(&attribute.type_.type_).ok()?,
+                    )),
+                    _ => None,
+                })
+                .collect(),
         }
     }
 
     fn parse_mixin(interface: &InterfaceMixinDefinition) -> ParsedInterface {
-        let name = interface.identifier.0.to_string();
-        let attributes = interface
-            .members
-            .body
-            .iter()
-            .filter_map(|member| match member {
-                MixinMember::Attribute(attribute) => Some((
-                    attribute.identifier.0.to_string(),
-                    AttributeType::try_from(&attribute.type_.type_).ok()?,
-                )),
-                _ => None,
-            })
-            .collect();
-
         ParsedInterface {
-            name,
+            name: interface.identifier.0.to_string(),
             inherits: None,
-            attributes,
+            attributes: interface
+                .members
+                .body
+                .iter()
+                .filter_map(|member| match member {
+                    MixinMember::Attribute(attribute) => Some((
+                        attribute.identifier.0.to_string(),
+                        AttributeType::try_from(&attribute.type_.type_).ok()?,
+                    )),
+                    _ => None,
+                })
+                .collect(),
         }
     }
 
