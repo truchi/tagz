@@ -8,3 +8,15 @@ edition = "2021"
 authors = ["🇫🇷 Romain TRUCHI <romain.truchi.06@gmail.com>"]
 
 [dependencies]
+
+[profile.dev]
+debug = false
+strip = true
+
+[profile.dev.package."*"]
+debug = false
+strip = true
+opt-level = 3
+debug-assertions = false
+overflow-checks = false
+codegen-units = 16
