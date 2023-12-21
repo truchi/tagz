@@ -241,7 +241,7 @@ impl Parser {
                         .map(|capture| capture.unwrap().as_str())
                         .collect::<Vec<_>>();
 
-                    tracing::trace!(element.name, ?contents, text, "😍");
+                    tracing::debug!(element.name, ?contents, text, "😍");
                     for content in contents {
                         element.contents.insert(content.to_owned());
                     }
@@ -259,7 +259,7 @@ impl Parser {
                     re.captures(&text)?;
                     assert_eq!(element.name, "script");
 
-                    tracing::trace!(element.name, text, "😍");
+                    tracing::debug!(element.name, text, "😍");
                     Some(())
                 },
             ),
@@ -336,23 +336,18 @@ impl Parser {
             (
                 &[
                     r"(\S+)",
-                    r"(\S+) — (.*)",
-                    r"(\S+) \(in \S+\) — (.*)",
-                    r"(\S+) \(in \S+ or \S+\) — (.*)",
-                    r"if the element is not a child of an \S+ or \S+ element: (\S+) — (.*)",
+                    r"(\S+) — .*",
+                    r"(\S+) \(in \S+\) — .*",
+                    r"(\S+) \(in \S+ or \S+\) — .*",
+                    r"if the element is not a child of an \S+ or \S+ element: (\S+) — .*",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     let text = simplify(text);
                     let captures = re.captures(&text)?;
                     let name = captures.get(1).unwrap().as_str().to_string();
-                    let description = captures
-                        .get(2)
-                        .map(|description| description.as_str())
-                        .unwrap_or_default()
-                        .to_string();
 
-                    tracing::debug!(element.name, name, description, text, "😍");
-                    element.attributes.insert(name, description);
+                    tracing::debug!(element.name, name, text, "😍");
+                    element.attributes.insert(name);
                     Some(())
                 },
             ),
@@ -417,7 +412,7 @@ pub struct ParsedElement {
     pub categories: BTreeSet<String>,
     pub contents: BTreeSet<String>,
     pub end_tag: bool,
-    pub attributes: BTreeMap</* name: */ String, /* description: */ String>,
+    pub attributes: BTreeSet<String>,
     pub interface: String,
 }
 

@@ -24,7 +24,7 @@ use std::{
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Element {
     pub name: String,
-    pub attributes: BTreeMap</* name: */ String, (AttributeType, /* description: */ String)>,
+    pub attributes: BTreeMap<String, AttributeType>,
     pub children: BTreeSet<String>,
     pub text: bool,
     pub end_tag: bool,
@@ -179,7 +179,7 @@ impl Spec {
                     categories: BTreeSet::new(),
                     contents: BTreeSet::new(),
                     end_tag: true,
-                    attributes: BTreeMap::new(),
+                    attributes: BTreeSet::new(),
                     interface: String::from("__INVALID__"),
                 };
 
@@ -261,19 +261,21 @@ impl Spec {
                     attributes: element
                         .attributes
                         .into_iter()
-                        .map(|(name, description)| (name, (AttributeType::String, description)))
+                        .map(|name| (name, AttributeType::String))
                         .chain({
                             global_attributes
                                 .iter()
                                 .chain(global_handlers.iter())
-                                .map(|name| (name.clone(), (AttributeType::String, String::new())))
+                                .map(|name| (name.clone(), AttributeType::String))
                         })
-                        .map(|(name, (ty, description))| {
-                            let ty = resolved
-                                .get(&flat_case(&name))
-                                .map(|(_, ty)| *ty)
-                                .unwrap_or(ty);
-                            (name, (ty, description))
+                        .map(|(name, ty)| {
+                            (
+                                name.to_owned(),
+                                resolved
+                                    .get(&flat_case(&name))
+                                    .map(|(_, ty)| *ty)
+                                    .unwrap_or(ty),
+                            )
                         })
                         .collect(),
                     children: element.contents.iter().fold(
@@ -388,13 +390,8 @@ impl Spec {
             let attributes = element
                 .attributes
                 .iter()
-                .map(|(name, (ty, description))| (snake_case(name), (ty, description)))
-                .map(|(name, (ty, description))| {
-                    quote! {
-                        #[doc = #description]
-                        pub #name: std::option::Option<#ty>,
-                    }
-                });
+                .map(|(name, ty)| (snake_case(name), ty))
+                .map(|(name, ty)| quote! { pub #name: std::option::Option<#ty>, });
             let description = format!(" The `<{}>` element.", element.name);
 
             write(
@@ -454,7 +451,7 @@ impl Spec {
             let attributes = element
                 .attributes
                 .iter()
-                .map(|(name, (ty, _))| (snake_case(name), ty.to_token_stream()))
+                .map(|(name, ty)| (snake_case(name), ty.to_token_stream()))
                 .map(|(name, ty)| {
                     quote! {
                         pub fn #name(mut self, #name: #ty) -> Self {
