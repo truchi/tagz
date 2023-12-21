@@ -1,10 +1,19 @@
-use crate::{flat_case, simplify, AttributeType};
+use crate::{parsers::idl::ParsedIdl, text};
 use regex::Regex;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use weedle::{interface::*, mixin::*, *};
+use std::collections::{BTreeSet, HashMap};
 
 type Parse = fn(&Regex, &str, &mut ParsedElement) -> Option<()>;
 type Counts = HashMap<(usize, Parse), usize>;
+
+#[derive(Debug)]
+pub struct ParsedElement {
+    pub name: String,
+    pub categories: BTreeSet<String>,
+    pub contents: BTreeSet<String>,
+    pub end_tag: bool,
+    pub attributes: BTreeSet<String>,
+    pub interface: String,
+}
 
 #[derive(Debug)]
 pub struct Parser {
@@ -107,7 +116,7 @@ impl Parser {
                     tracing::warn!(
                         index,
                         re = %self.regexes[*index],
-                        "No matches (Parser.{name})",
+                        "🤔 No matches (Parser.{name}())",
                     );
                 }
             }
@@ -137,7 +146,7 @@ impl Parser {
             }
         }
 
-        tracing::warn!(element.name, section, text, "😓");
+        tracing::warn!(element.name, section, text, "😓 No matches");
     }
 
     fn category_parsers() -> &'static [(&'static [&'static str], Parse)] {
@@ -160,7 +169,7 @@ impl Parser {
                 r"none",
             ],
             |re: &Regex, text: &str, element: &mut ParsedElement| {
-                let text = simplify(text);
+                let text = text::simplify(text);
                 let categories = re
                     .captures(&text)?
                     .iter()
@@ -168,7 +177,7 @@ impl Parser {
                     .map(|capture| capture.unwrap().as_str())
                     .collect::<Vec<_>>();
 
-                tracing::debug!(element.name, ?categories, text, "😍");
+                tracing::debug!(element.name, ?categories, text, "🥳");
                 for category in categories {
                     element.categories.insert(category.to_owned());
                 }
@@ -178,7 +187,7 @@ impl Parser {
         )]
     }
 
-    // TODO ..., but with no ... descendants. (Pass that to next stage?)
+    // TODO ..., but with no ... descendants. (Is this even possible?) (Pass that to next stage?)
     fn content_parsers() -> &'static [(&'static [&'static str], Parse)] {
         &[
             (
@@ -233,7 +242,7 @@ impl Parser {
                     r"when scripting is disabled, in an? \S+ element: in any order, zero or more (\S+) elements, zero or more (\S+) elements, and zero or more (\S+) elements",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = simplify(text);
+                    let text = text::simplify(text);
                     let contents = re
                         .captures(&text)?
                         .iter()
@@ -241,7 +250,7 @@ impl Parser {
                         .map(|capture| capture.unwrap().as_str())
                         .collect::<Vec<_>>();
 
-                    tracing::debug!(element.name, ?contents, text, "😍");
+                    tracing::debug!(element.name, ?contents, text, "🥳");
                     for content in contents {
                         element.contents.insert(content.to_owned());
                     }
@@ -255,22 +264,22 @@ impl Parser {
                     r"if there is an? \S+ attribute, the element must be either empty or contain only script documentation that also matches script content restrictions",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = simplify(text);
+                    let text = text::simplify(text);
                     re.captures(&text)?;
                     assert_eq!(element.name, "script");
 
-                    tracing::debug!(element.name, text, "😍");
+                    tracing::debug!(element.name, text, "🥳");
                     Some(())
                 },
             ),
             (
                 &[r"otherwise: text that conforms to the requirements given in the prose"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = simplify(text);
+                    let text = text::simplify(text);
                     re.captures(&text)?;
                     assert_eq!(element.name, "noscript");
 
-                    tracing::debug!(element.name, text, "😍");
+                    tracing::debug!(element.name, text, "🥳");
                     Some(())
                 },
             ),
@@ -278,11 +287,11 @@ impl Parser {
                 // TODO: Read the prose for <ruby>
                 &[r"see prose"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = simplify(text);
+                    let text = text::simplify(text);
                     re.captures(&text)?;
                     assert_eq!(element.name, "ruby");
 
-                    tracing::debug!(element.name, text, "😍");
+                    tracing::debug!(element.name, text, "🥳");
                     Some(())
                 },
             ),
@@ -297,11 +306,11 @@ impl Parser {
                     r"an? \S+ element's start|end tag can be omitted if .*",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = simplify(text);
+                    let text = text::simplify(text);
                     re.captures(&text)?;
                     let end_tag = true;
 
-                    tracing::debug!(element.name, end_tag, text, "😍");
+                    tracing::debug!(element.name, end_tag, text, "🥳");
                     element.end_tag = end_tag;
                     Some(())
                 },
@@ -309,11 +318,11 @@ impl Parser {
             (
                 &[r"no end tag"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = simplify(text);
+                    let text = text::simplify(text);
                     re.captures(&text)?;
                     let end_tag = false;
 
-                    tracing::debug!(element.name, end_tag, text, "😍");
+                    tracing::debug!(element.name, end_tag, text, "🥳");
                     element.end_tag = end_tag;
                     Some(())
                 },
@@ -324,16 +333,6 @@ impl Parser {
     fn attribute_parsers() -> &'static [(&'static [&'static str], Parse)] {
         &[
             (
-                &[r"global attributes"],
-                |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = simplify(text);
-                    re.captures(&text)?;
-
-                    tracing::debug!(element.name, text, "😍");
-                    Some(())
-                },
-            ),
-            (
                 &[
                     r"(\S+)",
                     r"(\S+) — .*",
@@ -342,26 +341,27 @@ impl Parser {
                     r"if the element is not a child of an \S+ or \S+ element: (\S+) — .*",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = simplify(text);
+                    let text = text::simplify(text);
                     let captures = re.captures(&text)?;
                     let name = captures.get(1).unwrap().as_str().to_string();
 
-                    tracing::debug!(element.name, name, text, "😍");
+                    tracing::debug!(element.name, name, text, "🥳");
                     element.attributes.insert(name);
                     Some(())
                 },
             ),
             (
                 &[
+                    r"global attributes",
                     r"also, the \S+ attribute has special semantics on this element: .*",
                     r"also, the \S+ global attribute has special semantics on this element",
                     r"any other attribute that has no namespace \(see prose\)",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = simplify(text);
+                    let text = text::simplify(text);
                     re.captures(&text)?;
 
-                    tracing::debug!(element.name, text, "😍");
+                    tracing::debug!(element.name, text, "🥳");
                     Some(())
                 },
             ),
@@ -380,7 +380,7 @@ impl Parser {
                     let captures = re.captures(&text)?;
                     let uses = captures[1].to_string();
 
-                    tracing::debug!(element.name, uses, text, "😍");
+                    tracing::debug!(element.name, uses, text, "🥳");
                     element.interface = uses;
                     Some(())
                 },
@@ -389,9 +389,9 @@ impl Parser {
                 &[r"\[exposed=window.*", r"typedef .*"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     // We only simplify the haystack here, parsing needs original text.
-                    re.captures(&simplify(text))?;
+                    re.captures(&text::simplify(text))?;
 
-                    tracing::debug!(element.name, "😍");
+                    tracing::debug!(element.name, "🥳");
                     element.interface = ParsedIdl::parse(text)
                         .interfaces
                         .values()
@@ -403,206 +403,5 @@ impl Parser {
                 },
             ),
         ]
-    }
-}
-
-#[derive(Debug)]
-pub struct ParsedElement {
-    pub name: String,
-    pub categories: BTreeSet<String>,
-    pub contents: BTreeSet<String>,
-    pub end_tag: bool,
-    pub attributes: BTreeSet<String>,
-    pub interface: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct ParsedInterface {
-    pub name: String,
-    pub inherits: Option<String>,
-    pub attributes: BTreeMap</* name: */ String, AttributeType>,
-}
-
-#[derive(Debug)]
-pub struct ParsedIdl {
-    pub interfaces: BTreeMap</* name: */ String, ParsedInterface>,
-    pub mixins: BTreeMap</* name: */ String, ParsedInterface>,
-    pub includes: BTreeMap</* left: */ String, /* right: */ BTreeSet<String>>,
-}
-
-impl ParsedIdl {
-    pub fn parse(text: &str) -> Self {
-        let definitions = weedle::parse(&text).unwrap();
-
-        definitions.iter().for_each(|definition| match definition {
-            // We only care about interfaces, mixins, and includes.
-            Definition::Interface(_) => {}
-            Definition::InterfaceMixin(_) => {}
-            Definition::IncludesStatement(_) => {}
-            // We could care about those, but don't.
-            // ("... : ..." and "... includes ..." don't reference partial definitions)
-            // (from this spec, at least)
-            Definition::PartialInterface(_) => {}
-            Definition::PartialInterfaceMixin(_) => {}
-            // We don't care about these.
-            Definition::Callback(_) => {}
-            Definition::Dictionary(_) => {}
-            Definition::Enum(_) => {}
-            Definition::Typedef(_) => {}
-            // Those are not found in the spec.
-            Definition::CallbackInterface(_) => unreachable!(),
-            Definition::Namespace(_) => unreachable!(),
-            Definition::PartialDictionary(_) => unreachable!(),
-            Definition::PartialNamespace(_) => unreachable!(),
-            Definition::Implements(_) => unreachable!(),
-        });
-
-        let interfaces = definitions
-            .iter()
-            .filter_map(|definition| match definition {
-                Definition::Interface(interface) => Some(interface),
-                _ => None,
-            })
-            .map(|interface| Self::parse_interface(interface))
-            .map(|interface| (interface.name.clone(), interface))
-            .fold(BTreeMap::new(), |mut map, (name, interface)| {
-                assert!(map.insert(name, interface).is_none());
-                map
-            });
-        let mixins = definitions
-            .iter()
-            .filter_map(|definition| match definition {
-                Definition::InterfaceMixin(mixin) => Some(mixin),
-                _ => None,
-            })
-            .map(|mixin| Self::parse_mixin(mixin))
-            .map(|mixin| (mixin.name.clone(), mixin))
-            .fold(BTreeMap::new(), |mut map, (name, mixin)| {
-                assert!(map.insert(name, mixin).is_none());
-                map
-            });
-        let includes = definitions
-            .iter()
-            .filter_map(|definition| match definition {
-                Definition::IncludesStatement(includes) => Some(includes),
-                _ => None,
-            })
-            .map(|includes| Self::parse_includes(includes))
-            .fold(
-                BTreeMap::<String, BTreeSet<String>>::new(),
-                |mut map, (left, right)| {
-                    assert!(map.entry(left).or_default().insert(right));
-                    map
-                },
-            );
-
-        // Are we complete?
-        // Fow now, we only miss interfaces/mixins defined in other specifcations.
-        for interface in interfaces.values() {
-            let name = &interface.name;
-
-            if let Some(includes) = includes.get(&interface.name) {
-                for include in includes {
-                    if !mixins.contains_key(include) {
-                        tracing::trace!("😓 {name} includes {include}");
-                    }
-                }
-            }
-
-            if let Some(inherits) = interface.inherits.as_ref() {
-                if !interfaces.contains_key(inherits) {
-                    tracing::trace!("😓 {name} : {inherits}");
-                }
-            }
-        }
-
-        Self {
-            interfaces,
-            mixins,
-            includes,
-        }
-    }
-
-    fn parse_interface(interface: &InterfaceDefinition) -> ParsedInterface {
-        ParsedInterface {
-            name: interface.identifier.0.to_string(),
-            inherits: interface
-                .inheritance
-                .map(|parent| parent.identifier.0.to_string()),
-            attributes: interface
-                .members
-                .body
-                .iter()
-                .filter_map(|member| match member {
-                    InterfaceMember::Attribute(attribute) => Some((
-                        attribute.identifier.0.to_string(),
-                        AttributeType::try_from(&attribute.type_.type_).ok()?,
-                    )),
-                    _ => None,
-                })
-                .collect(),
-        }
-    }
-
-    fn parse_mixin(interface: &InterfaceMixinDefinition) -> ParsedInterface {
-        ParsedInterface {
-            name: interface.identifier.0.to_string(),
-            inherits: None,
-            attributes: interface
-                .members
-                .body
-                .iter()
-                .filter_map(|member| match member {
-                    MixinMember::Attribute(attribute) => Some((
-                        attribute.identifier.0.to_string(),
-                        AttributeType::try_from(&attribute.type_.type_).ok()?,
-                    )),
-                    _ => None,
-                })
-                .collect(),
-        }
-    }
-
-    fn parse_includes(includes: &IncludesStatementDefinition) -> (String, String) {
-        (
-            includes.lhs_identifier.0.to_string(),
-            includes.rhs_identifier.0.to_string(),
-        )
-    }
-
-    pub fn resolve(
-        &self,
-        name: &str,
-    ) -> BTreeMap</* flat_case_name: */ String, (/* original_name: */ String, AttributeType)> {
-        let interface = self.interfaces.get(name).unwrap();
-        let mut inheritances = vec![interface];
-
-        while let Some(inherits) = inheritances.last().unwrap().inherits.as_ref() {
-            if let Some(inherits) = self.interfaces.get(inherits) {
-                inheritances.push(inherits);
-            } else {
-                break;
-            }
-        }
-
-        if let Some(mixins) = self.includes.get(name) {
-            for mixin in mixins {
-                if let Some(mixin) = self.mixins.get(mixin) {
-                    inheritances.insert(0, mixin);
-                }
-            }
-        }
-
-        inheritances
-            .into_iter()
-            .rev()
-            .fold(BTreeMap::new(), |mut attributes, interface| {
-                for (name, ty) in &interface.attributes {
-                    assert!(attributes
-                        .insert(flat_case(name), (name.clone(), *ty))
-                        .is_none());
-                }
-                attributes
-            })
     }
 }
