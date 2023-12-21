@@ -1,4 +1,4 @@
-use crate::{simplify, AttributeType};
+use crate::{flat_case, simplify, AttributeType};
 use regex::Regex;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use weedle::{interface::*, mixin::*, *};
@@ -465,7 +465,10 @@ impl Parser {
     fn idl_parsers() -> &'static [(&'static [&'static str], Parse)] {
         &[
             (
-                &[r"Uses? (\S+)", r"Uses (\S+), as defined for \S+ elements\."],
+                &[
+                    r"Uses? (\S+)\.",
+                    r"Uses (\S+), as defined for \S+ elements\.",
+                ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     // We don't simplify here to capture case.
                     let captures = re.captures(&text)?;
@@ -508,7 +511,7 @@ pub struct ParsedElement {
     pub interface: String,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ParsedInterface {
     pub name: String,
     pub inherits: Option<String>,
@@ -588,7 +591,7 @@ impl ParsedIdl {
                 },
             );
 
-        // Are wwe complete?
+        // Are we complete?
         // Fow now, we only miss interfaces/mixins defined in other specifcations.
         for interface in interfaces.values() {
             let name = &interface.name;
@@ -660,5 +663,41 @@ impl ParsedIdl {
             includes.lhs_identifier.0.to_string(),
             includes.rhs_identifier.0.to_string(),
         )
+    }
+
+    pub fn resolve(
+        &self,
+        name: &str,
+    ) -> BTreeMap</* flat_case_name: */ String, (/* original_name: */ String, AttributeType)> {
+        let interface = self.interfaces.get(name).unwrap();
+        let mut inheritances = vec![interface];
+
+        while let Some(inherits) = inheritances.last().unwrap().inherits.as_ref() {
+            if let Some(inherits) = self.interfaces.get(inherits) {
+                inheritances.push(inherits);
+            } else {
+                break;
+            }
+        }
+
+        if let Some(mixins) = self.includes.get(name) {
+            for mixin in mixins {
+                if let Some(mixin) = self.mixins.get(mixin) {
+                    inheritances.insert(0, mixin);
+                }
+            }
+        }
+
+        inheritances
+            .into_iter()
+            .rev()
+            .fold(BTreeMap::new(), |mut attributes, interface| {
+                for (name, ty) in &interface.attributes {
+                    assert!(attributes
+                        .insert(flat_case(name), (name.clone(), *ty))
+                        .is_none());
+                }
+                attributes
+            })
     }
 }

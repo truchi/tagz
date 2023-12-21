@@ -1,6 +1,7 @@
 use crate::{
+    flat_case,
     parser::{ParsedElement, ParsedIdl, Parser},
-    simplify, AttributeType,
+    pascal_case, simplify, snake_case, AttributeType,
 };
 use convert_case::{Case, Casing};
 use proc_macro2::{Ident, TokenStream};
@@ -11,20 +12,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{create_dir_all, read_to_string, write},
 };
-
-macro_rules! selector {
-    ($($arg:tt)*) => {{
-        let selector = format!($($arg)*);
-        ::scraper::Selector::parse(&selector)
-            .unwrap_or_else(|err| panic!("`{selector}`: {err:?}"))
-    }};
-}
-
-macro_rules! ident {
-    ($($arg:tt)*) => {
-        ::quote::format_ident!($($arg)*)
-    };
-}
 
 // TODO
 // - Void elements: https://html.spec.whatwg.org/multipage/syntax.html#elements-2
@@ -247,7 +234,7 @@ impl Spec {
     fn resolve(
         global_attributes: Vec<String>,
         global_handlers: Vec<String>,
-        _idl: ParsedIdl,
+        idl: ParsedIdl,
         elements: Vec<ParsedElement>,
     ) -> Vec<Element> {
         let names = elements
@@ -269,94 +256,83 @@ impl Spec {
 
         elements
             .into_iter()
-            .map(|element| Element {
-                name: element.name.clone(),
-                attributes: element
-                    .attributes
-                    .into_iter()
-                    .map(|(name, description)| (name, (AttributeType::String, description)))
-                    .chain({
-                        global_attributes
-                            .iter()
-                            .chain(global_handlers.iter())
-                            .map(|name| (name.clone(), (AttributeType::String, String::new())))
-                    })
-                    .collect(),
-                children: element
-                    .contents
-                    .iter()
-                    .fold(BTreeSet::new(), |mut children, name| {
-                        match name.as_str() {
-                            // https://html.spec.whatwg.org/multipage/dom.html#the-nothing-content-model
-                            // > When an element's content model is nothing,
-                            // > the element must contain no Text nodes and no element nodes.
-                            // NOTE:
-                            // Elements might be in "nothing" under certain conditions,
-                            // but have children under other conditions.
-                            "nothing" => return children,
+            .map(|element| {
+                let resolved = idl.resolve(&element.interface);
 
-                            // https://html.spec.whatwg.org/multipage/dom.html#transparent-content-models
-                            // > The content model of a transparent element is derived
-                            // > from the content model of its parent element: [...].
-                            // > When a transparent element has no parent, then its content model
-                            // > must instead be treated as accepting any flow content.
-                            // NOTE:
-                            // Of course this is impossible to implement in a static way,
-                            // and we don't want to restrict to flow content only.
-                            "transparent" => return names.clone(),
+                Element {
+                    name: element.name.clone(),
+                    attributes: element
+                        .attributes
+                        .into_iter()
+                        .map(|(name, description)| (name, (AttributeType::String, description)))
+                        .chain({
+                            global_attributes
+                                .iter()
+                                .chain(global_handlers.iter())
+                                .map(|name| (name.clone(), (AttributeType::String, String::new())))
+                        })
+                        .map(|(name, (ty, description))| {
+                            let ty = resolved
+                                .get(&flat_case(&name))
+                                .map(|(_, ty)| *ty)
+                                .unwrap_or(ty);
+                            (name, (ty, description))
+                        })
+                        .collect(),
+                    children: element.contents.iter().fold(
+                        BTreeSet::new(),
+                        |mut children, name| {
+                            match name.as_str() {
+                                // https://html.spec.whatwg.org/multipage/dom.html#the-nothing-content-model
+                                // > When an element's content model is nothing,
+                                // > the element must contain no Text nodes and no element nodes.
+                                // NOTE:
+                                // Elements might be in "nothing" under certain conditions,
+                                // but have children under other conditions.
+                                "nothing" => return children,
 
-                            // NOTE:
-                            // We handle "text" on `Element::text` directly.
-                            "text" => return children,
+                                // https://html.spec.whatwg.org/multipage/dom.html#transparent-content-models
+                                // > The content model of a transparent element is derived
+                                // > from the content model of its parent element: [...].
+                                // > When a transparent element has no parent, then its content model
+                                // > must instead be treated as accepting any flow content.
+                                // NOTE:
+                                // Of course this is impossible to implement in a static way,
+                                // and we don't want to restrict to flow content only.
+                                "transparent" => return names.clone(),
 
-                            _ => {
-                                if let Some(elements) = categories.get(name) {
-                                    children.extend(elements.clone());
-                                    return children;
+                                // NOTE:
+                                // We handle "text" on `Element::text` directly.
+                                "text" => return children,
+
+                                _ => {
+                                    if let Some(elements) = categories.get(name) {
+                                        children.extend(elements.clone());
+                                        return children;
+                                    }
+
+                                    if names.contains(name) {
+                                        children.insert(name.clone());
+                                        return children;
+                                    }
+
+                                    unreachable!();
                                 }
-
-                                if names.contains(name) {
-                                    children.insert(name.clone());
-                                    return children;
-                                }
-
-                                unreachable!();
                             }
-                        }
-                    }),
-                // https://html.spec.whatwg.org/multipage/dom.html#text-content
-                // > Text is sometimes used as a content model on its own,
-                // > but is also phrasing content.
-                text: element.contents.contains("text") || element.contents.contains("phrasing"),
-                end_tag: element.end_tag,
+                        },
+                    ),
+                    // https://html.spec.whatwg.org/multipage/dom.html#text-content
+                    // > Text is sometimes used as a content model on its own,
+                    // > but is also phrasing content.
+                    text: element.contents.contains("text")
+                        || element.contents.contains("phrasing"),
+                    end_tag: element.end_tag,
+                }
             })
             .collect()
     }
 
     fn generate(elements: Vec<Element>) {
-        fn flat_case(s: &str) -> String {
-            s.to_case(Case::Flat)
-        }
-
-        fn snake_case(s: &str) -> Ident {
-            let s = s.to_case(Case::Snake);
-            let s = match s.as_str() {
-                "as" => "as_",
-                "type" => "type_",
-                "loop" => "loop_",
-                "for" => "for_",
-                "async" => "async_",
-                "id" => "id_",
-                s => s,
-            };
-            ident!("{s}")
-        }
-
-        fn pascal_case(s: &str) -> Ident {
-            let s = s.to_case(Case::Pascal);
-            ident!("{s}")
-        }
-
         fn child_name(s: &str) -> Ident {
             let s = s.to_case(Case::Pascal);
             ident!("{s}Child")
@@ -398,6 +374,13 @@ impl Spec {
                 pub use elements::*;
                 use children::*;
                 use builders::*;
+
+                #[derive(Clone, Debug)]
+                pub enum BoolOrF64OrString {
+                    Bool(bool),
+                    F64(f64),
+                    String(String),
+                }
             }
         });
 
@@ -529,6 +512,3 @@ impl Spec {
         });
     }
 }
-
-/// Utils.
-impl Spec {}

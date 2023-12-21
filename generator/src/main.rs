@@ -1,13 +1,28 @@
+macro_rules! selector {
+    ($($arg:tt)*) => {{
+        let selector = format!($($arg)*);
+        ::scraper::Selector::parse(&selector)
+            .unwrap_or_else(|err| panic!("`{selector}`: {err:?}"))
+    }};
+}
+
+macro_rules! ident {
+    ($($arg:tt)*) => {
+        ::quote::format_ident!($($arg)*)
+    };
+}
+
 mod parser;
 mod spec;
 
-use proc_macro2::TokenStream;
+use convert_case::{Case, Casing};
+use proc_macro2::{Ident, TokenStream};
 use quote::{quote, ToTokens};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use spec::Spec;
 
-#[derive(Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Debug)]
 pub enum AttributeType {
     Bool,
     I16,
@@ -155,6 +170,29 @@ fn simplify(text: &str) -> String {
         .trim()
         .trim_end_matches('.')
         .to_lowercase()
+}
+
+fn flat_case(s: &str) -> String {
+    s.to_case(Case::Flat)
+}
+
+fn snake_case(s: &str) -> Ident {
+    let s = s.to_case(Case::Snake);
+    let s = match s.as_str() {
+        "as" => "as_",
+        "type" => "type_",
+        "loop" => "loop_",
+        "for" => "for_",
+        "async" => "async_",
+        "id" => "id_",
+        s => s,
+    };
+    ident!("{s}")
+}
+
+fn pascal_case(s: &str) -> Ident {
+    let s = s.to_case(Case::Pascal);
+    ident!("{s}")
 }
 
 #[tokio::main]
