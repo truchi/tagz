@@ -271,8 +271,9 @@ fn parse_global_attributes(html: &Html) -> Vec<String> {
 
     list(ATTRIBUTES)
         .into_iter()
-        .chain(list(HANDLERS))
         .chain(additional)
+        .inspect(|attribute| assert!(!attribute.starts_with("on")))
+        .chain(list(HANDLERS))
         .collect()
 }
 
@@ -475,6 +476,32 @@ fn generate_files(elements: Vec<Element>) {
         std::fs::write(file, content).unwrap();
     }
 
+    let elements = {
+        let mut elements = elements;
+        elements.iter_mut().for_each(|element| {
+            // We handle those attributes manually.
+            assert!(element.attributes.remove("id").is_some());
+            assert!(element.attributes.remove("class").is_some());
+        });
+        elements
+    };
+
+    let sort_attributes = |attributes: &BTreeMap<String, AttributeType>| {
+        let mut attributes = attributes
+            .iter()
+            .map(|(name, ty)| (name.clone(), *ty))
+            .collect::<Vec<_>>();
+        attributes.sort_by(
+            |(a, _), (b, _)| match (a.starts_with("on"), b.starts_with("on")) {
+                (true, true) => a.cmp(&b),
+                (true, false) => std::cmp::Ordering::Greater,
+                (false, true) => std::cmp::Ordering::Less,
+                (false, false) => a.cmp(&b),
+            },
+        );
+        attributes
+    };
+
     write(None, "mod", {
         let names = elements
             .iter()
@@ -497,24 +524,14 @@ fn generate_files(elements: Vec<Element>) {
         }
     });
 
-    let elements = {
-        let mut elements = elements;
-        elements.iter_mut().for_each(|element| {
-            // We handle those attributes manually.
-            assert!(element.attributes.remove("id").is_some());
-            assert!(element.attributes.remove("class").is_some());
-        });
-        elements
-    };
-
+    // Elements.
     elements.iter().for_each(|element| {
         let name = text::pascal(&element.name);
         let child = child_name(&element.name);
         let builder = builder_name(&element.name);
-        let attributes = element
-            .attributes
-            .iter()
-            .map(|(name, ty)| (text::attribute(name), ty))
+        let attributes = sort_attributes(&element.attributes)
+            .into_iter()
+            .map(|(name, ty)| (text::attribute(&name), ty))
             .map(|(name, ty)| quote! { pub #name: std::option::Option<#ty>, });
         let children = (!element.children.is_empty()).then_some(quote! {
             pub children: Vec<children::#child>,
@@ -563,6 +580,7 @@ fn generate_files(elements: Vec<Element>) {
         );
     });
 
+    // Children.
     elements.iter().for_each(|element| {
         if element.children.is_empty() {
             return;
@@ -587,14 +605,14 @@ fn generate_files(elements: Vec<Element>) {
         );
     });
 
+    // Builders.
     elements.iter().for_each(|element| {
         let name = text::pascal(&element.name);
         let child = child_name(&element.name);
         let builder = builder_name(&element.name);
-        let attributes = element
-            .attributes
-            .iter()
-            .map(|(name, ty)| (text::attribute(name), ty.to_token_stream()))
+        let attributes = sort_attributes(&element.attributes)
+            .into_iter()
+            .map(|(name, ty)| (text::attribute(&name), ty.to_token_stream()))
             .map(|(name, ty)| {
                 quote! {
                     pub fn #name(mut self, #name: #ty) -> Self {
