@@ -43,7 +43,6 @@ use std::collections::{BTreeMap, BTreeSet};
 // - Attributes run-time validation (debug or release)
 // - Autonomous custom element
 // - HTMX support
-// - Chainable `class()`, `data()`, `aria()` methods
 
 const URL: &'static str = "https://html.spec.whatwg.org";
 const SPEC: &'static str = "spec.html";
@@ -555,7 +554,6 @@ fn generate_files(elements: Vec<Element>) {
                     pub id: std::option::Option<String>,
                     pub classes: std::collections::HashSet<String>,
                     pub data: std::collections::HashMap<String, String>,
-                    pub aria: std::collections::HashMap<String, String>,
                     #(#attributes)*
                     #children
                 }
@@ -676,11 +674,6 @@ fn generate_files(elements: Vec<Element>) {
 
                     pub fn data(mut self, key: String, value: String) -> Self {
                         self.element.data.insert(key, value);
-                        self
-                    }
-
-                    pub fn aria(mut self, key: String, value: String) -> Self {
-                        self.element.aria.insert(key, value);
                         self
                     }
 
