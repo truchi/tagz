@@ -530,17 +530,21 @@ fn generate_files(elements: Vec<Element>) {
         let name = text::pascal(&element.name);
         let child = child_name(&element.name);
         let builder = builder_name(&element.name);
-        let child_fn = (!element.children.is_empty()).then_some(quote! {
-            pub fn child<T: Into<children::#child>>(child: T) -> builders::#builder {
-                <builders::#builder as Default>::default().child(child)
-            }
-        });
         let attributes = sort_attributes(&element.attributes)
             .into_iter()
             .map(|(name, ty)| (text::attribute(&name), ty))
             .map(|(name, ty)| quote! { pub #name: std::option::Option<#ty>, });
         let children = (!element.children.is_empty()).then_some(quote! {
             pub children: Vec<children::#child>,
+        });
+        let children_builder = (!element.children.is_empty()).then_some(quote! {
+            pub fn child<T: Into<children::#child>>(child: T) -> builders::#builder {
+                <builders::#builder as Default>::default().child(child)
+            }
+
+            pub fn children<T: Into<children::#child>, I: IntoIterator<Item = T>>(children: I) -> builders::#builder {
+                <builders::#builder as Default>::default().children(children)
+            }
         });
         let attribute_builders = sort_attributes(&element.attributes)
             .into_iter()
@@ -549,18 +553,6 @@ fn generate_files(elements: Vec<Element>) {
                 quote! {
                     pub fn #name<T: Into<#ty>>(#name: T) -> builders::#builder {
                         <builders::#builder as Default>::default().#name(#name)
-                    }
-                }
-            });
-        let child_builders = element
-            .children
-            .iter()
-            .map(|name| (text::snake(name), text::pascal(name)))
-            .map(|(snake, pascal)| {
-                quote! {
-                    #[allow(non_snake_case)]
-                    pub fn #pascal<T: Into<#pascal>>(#snake: T) -> builders::#builder {
-                        <builders::#builder as Default>::default().#pascal(#snake)
                     }
                 }
             });
@@ -580,7 +572,7 @@ fn generate_files(elements: Vec<Element>) {
                 pub struct #name {
                     pub id: StdOption<CowStr>,
                     pub classes: HashSet<CowStr>,
-                    pub data: HashMap<CowStr, CowStr>,
+                    pub datas: HashMap<CowStr, CowStr>,
                     #(#attributes)*
                     #children
                 }
@@ -594,13 +586,20 @@ fn generate_files(elements: Vec<Element>) {
                         <builders::#builder as Default>::default().class(class)
                     }
 
+                    pub fn classes<T: Into<CowStr>, I: IntoIterator<Item = T>>(classes: I) -> builders::#builder {
+                        <builders::#builder as Default>::default().classes(classes)
+                    }
+
                     pub fn data<K: Into<CowStr>, V: Into<CowStr>>(key: K, value: V) -> builders::#builder {
                         <builders::#builder as Default>::default().data(key, value)
                     }
 
-                    #child_fn
+                    pub fn datas<K: Into<CowStr>, V: Into<CowStr>, I: IntoIterator<Item = (K, V)>>(datas: I) -> builders::#builder {
+                        <builders::#builder as Default>::default().datas(datas)
+                    }
+
+                    #children_builder
                     #(#attribute_builders)*
-                    #(#child_builders)*
                 }
 
                 impl From<builders::#builder> for #name {
@@ -677,14 +676,20 @@ fn generate_files(elements: Vec<Element>) {
     // Builders.
     elements.iter().for_each(|element| {
         let name = text::pascal(&element.name);
-        let child = child_name(&element.name);
         let builder = builder_name(&element.name);
-        let child_fn = (!element.children.is_empty()).then_some(quote! {
-            pub fn child<T: Into<children::#child>>(mut self, child: T) -> Self {
-                self.element.children.push(child.into());
-                self
-            }
-        });
+        let children = (!element.children.is_empty())
+            .then_some(child_name(&element.name))
+            .map(|child| quote! {
+                pub fn child<T: Into<children::#child>>(mut self, child: T) -> Self {
+                    self.element.children.push(child.into());
+                    self
+                }
+
+                pub fn children<T: Into<children::#child>, I: IntoIterator<Item = T>>(mut self, children: I) -> Self {
+                    self.element.children.extend(children.into_iter().map(|child| child.into()));
+                    self
+                }
+            });
         let attributes = sort_attributes(&element.attributes)
             .into_iter()
             .map(|(name, ty)| (text::attribute(&name), ty.to_token_stream()))
@@ -692,19 +697,6 @@ fn generate_files(elements: Vec<Element>) {
                 quote! {
                     pub fn #name<T: Into<#ty>>(mut self, #name: T) -> Self {
                         self.element.#name = Some(#name.into());
-                        self
-                    }
-                }
-            });
-        let children = element
-            .children
-            .iter()
-            .map(|name| (text::snake(name), text::pascal(name)))
-            .map(|(snake, pascal)| {
-                quote! {
-                    #[allow(non_snake_case)]
-                    pub fn #pascal<T: Into<#pascal>>(mut self, #snake: T) -> Self {
-                        self.element.children.push(children::#child::#pascal(#snake.into()));
                         self
                     }
                 }
@@ -738,14 +730,23 @@ fn generate_files(elements: Vec<Element>) {
                         self
                     }
 
-                    pub fn data<K: Into<CowStr>, V: Into<CowStr>>(mut self, key: K, value: V) -> Self {
-                        self.element.data.insert(key.into(), value.into());
+                    pub fn classes<T: Into<CowStr>, I: IntoIterator<Item = T>>(mut self, classes: I) -> Self {
+                        self.element.classes.extend(classes.into_iter().map(|class| class.into()));
                         self
                     }
 
-                    #child_fn
+                    pub fn data<K: Into<CowStr>, V: Into<CowStr>>(mut self, key: K, value: V) -> Self {
+                        self.element.datas.insert(key.into(), value.into());
+                        self
+                    }
+
+                    pub fn datas<K: Into<CowStr>, V: Into<CowStr>, I: IntoIterator<Item = (K, V)>>(mut self, datas: I) -> Self {
+                        self.element.datas.extend(datas.into_iter().map(|(key, value)| (key.into(), value.into())));
+                        self
+                    }
+
+                    #children
                     #(#attributes)*
-                    #(#children)*
                 }
 
                 impl From<#name> for #builder {
