@@ -473,24 +473,19 @@ fn generate_files(elements: Vec<Element>) {
             .map(|element| text::flat(&element.name))
             .map(|name| ident!("{name}"))
             .map(|name| quote! { mod #name; pub use #name::*; });
-        let names2 = names.clone();
-        let names3 = names.clone();
+        let children = elements
+            .iter()
+            .filter(|element| !element.children.is_empty())
+            .map(|element| text::flat(&element.name))
+            .map(|name| ident!("{name}"))
+            .map(|name| quote! { mod #name; pub use #name::*; });
+        let builders = names.clone();
 
         quote! {
-            pub mod elements { #(#names)* }
-            pub mod children { #(#names2)* }
-            pub mod builders { #(#names3)* }
-
             pub use elements::*;
-            use children::*;
-            use builders::*;
-
-            #[derive(Clone, Debug)]
-            pub enum BoolOrF64OrString {
-                Bool(bool),
-                F64(f64),
-                String(String),
-            }
+            pub mod elements { #(#names)* }
+            pub mod children { #(#children)* }
+            pub mod builders { #(#builders)* }
         }
     });
 
@@ -503,31 +498,34 @@ fn generate_files(elements: Vec<Element>) {
             .iter()
             .map(|(name, ty)| (text::snake(name), ty))
             .map(|(name, ty)| quote! { pub #name: std::option::Option<#ty>, });
+        let children = (!element.children.is_empty()).then_some(quote! {
+            pub children: Vec<children::#child>,
+        });
         let description = format!(" The `<{}>` element.", element.name);
 
         write(
             "elements",
             text::flat(&element.name),
             quote! {
-                use crate::generated::*;
+                use crate::*;
 
                 #[doc = #description]
                 #[derive(Clone, Default, Debug)]
                 pub struct #name {
                     #(#attributes)*
-                    pub children: Vec<#child>,
+                    #children
                 }
 
                 #[doc = #description]
                 #[allow(non_snake_case)]
-                pub fn #name() -> #builder {
-                    #builder {
+                pub fn #name() -> builders::#builder {
+                    builders::#builder {
                         element: #name::default(),
                     }
                 }
 
-                impl From<#builder> for #name {
-                    fn from(builder: #builder) -> Self {
+                impl From<builders::#builder> for #name {
+                    fn from(builder: builders::#builder) -> Self {
                         builder.element
                     }
                 }
@@ -536,6 +534,10 @@ fn generate_files(elements: Vec<Element>) {
     });
 
     elements.iter().for_each(|element| {
+        if element.children.is_empty() {
+            return;
+        }
+
         let child = child_name(&element.name);
         let name = element.children.iter().map(|name| text::pascal(name));
         let description = format!(" The `<{}>` element's children.", element.name);
@@ -544,7 +546,7 @@ fn generate_files(elements: Vec<Element>) {
             "children",
             text::flat(&element.name),
             quote! {
-                use crate::generated::*;
+                use crate::*;
 
                 #[doc = #description]
                 #[derive(Clone, Debug)]
@@ -579,18 +581,26 @@ fn generate_files(elements: Vec<Element>) {
                 quote! {
                     #[allow(non_snake_case)]
                     pub fn #pascal(mut self, #snake: #pascal) -> Self {
-                        self.element.children.push(#child::#pascal(#snake));
+                        self.element.children.push(children::#child::#pascal(#snake));
                         self
                     }
                 }
             });
+        let children = (!element.children.is_empty()).then_some(quote! {
+            pub fn child(mut self, child: children::#child) -> Self {
+                self.element.children.push(child);
+                self
+            }
+
+            #(#children)*
+        });
         let description = format!(" The `<{}>` element's builder.", element.name);
 
         write(
             "builders",
             text::flat(&element.name),
             quote! {
-                use crate::generated::*;
+                use crate::*;
 
                 #[doc = #description]
                 #[derive(Clone, Default, Debug)]
@@ -600,13 +610,7 @@ fn generate_files(elements: Vec<Element>) {
 
                 impl #builder {
                     #(#attributes)*
-
-                    pub fn child(mut self, child: #child) -> Self {
-                        self.element.children.push(child);
-                        self
-                    }
-
-                    #(#children)*
+                    #children
 
                     pub fn build(self) -> #name {
                         self.element
