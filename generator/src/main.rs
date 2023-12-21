@@ -67,6 +67,7 @@ mod text {
 
     pub fn snake(s: &str) -> Ident {
         let s = s.to_case(Case::Snake);
+        // Rust keywords
         let s = match s.as_str() {
             "as" => "as_",
             "async" => "async_",
@@ -82,6 +83,13 @@ mod text {
     pub fn pascal(s: &str) -> Ident {
         let s = s.to_case(Case::Pascal);
         ident!("{s}")
+    }
+
+    pub fn attribute(s: &str) -> Ident {
+        match snake(s).to_string().as_str() {
+            "data" => ident!("data_"), // Conflicts with `data-*`
+            s => ident!("{s}"),
+        }
     }
 }
 
@@ -489,6 +497,16 @@ fn generate_files(elements: Vec<Element>) {
         }
     });
 
+    let elements = {
+        let mut elements = elements;
+        elements.iter_mut().for_each(|element| {
+            // We handle those attributes manually.
+            assert!(element.attributes.remove("id").is_some());
+            assert!(element.attributes.remove("class").is_some());
+        });
+        elements
+    };
+
     elements.iter().for_each(|element| {
         let name = text::pascal(&element.name);
         let child = child_name(&element.name);
@@ -496,7 +514,7 @@ fn generate_files(elements: Vec<Element>) {
         let attributes = element
             .attributes
             .iter()
-            .map(|(name, ty)| (text::snake(name), ty))
+            .map(|(name, ty)| (text::attribute(name), ty))
             .map(|(name, ty)| quote! { pub #name: std::option::Option<#ty>, });
         let children = (!element.children.is_empty()).then_some(quote! {
             pub children: Vec<children::#child>,
@@ -512,8 +530,20 @@ fn generate_files(elements: Vec<Element>) {
                 #[doc = #description]
                 #[derive(Clone, Default, Debug)]
                 pub struct #name {
+                    pub id: std::option::Option<String>,
+                    pub classes: std::collections::HashSet<String>,
+                    pub data: std::collections::HashMap<String, String>,
+                    pub aria: std::collections::HashMap<String, String>,
                     #(#attributes)*
                     #children
+                }
+
+                impl #name {
+                    pub fn builder() -> builders::#builder {
+                        builders::#builder {
+                            element: #name::default(),
+                        }
+                    }
                 }
 
                 #[doc = #description]
@@ -564,7 +594,7 @@ fn generate_files(elements: Vec<Element>) {
         let attributes = element
             .attributes
             .iter()
-            .map(|(name, ty)| (text::snake(name), ty.to_token_stream()))
+            .map(|(name, ty)| (text::attribute(name), ty.to_token_stream()))
             .map(|(name, ty)| {
                 quote! {
                     pub fn #name(mut self, #name: #ty) -> Self {
@@ -587,12 +617,12 @@ fn generate_files(elements: Vec<Element>) {
                 }
             });
         let children = (!element.children.is_empty()).then_some(quote! {
+            #(#children)*
+
             pub fn child(mut self, child: children::#child) -> Self {
                 self.element.children.push(child);
                 self
             }
-
-            #(#children)*
         });
         let description = format!(" The `<{}>` element's builder.", element.name);
 
@@ -609,6 +639,26 @@ fn generate_files(elements: Vec<Element>) {
                 }
 
                 impl #builder {
+                    pub fn id(mut self, id: String) -> Self {
+                        self.element.id = Some(id);
+                        self
+                    }
+
+                    pub fn class(mut self, class: String) -> Self {
+                        self.element.classes.insert(class);
+                        self
+                    }
+
+                    pub fn data(mut self, key: String, value: String) -> Self {
+                        self.element.data.insert(key, value);
+                        self
+                    }
+
+                    pub fn aria(mut self, key: String, value: String) -> Self {
+                        self.element.aria.insert(key, value);
+                        self
+                    }
+
                     #(#attributes)*
                     #children
 
