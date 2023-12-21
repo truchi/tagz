@@ -177,7 +177,6 @@ impl Spec {
                 let mut element = ParsedElement {
                     name: name.to_owned(),
                     categories: BTreeSet::new(),
-                    contexts: BTreeSet::new(),
                     contents: BTreeSet::new(),
                     end_tag: true,
                     attributes: BTreeMap::new(),
@@ -196,9 +195,7 @@ impl Spec {
                             "categories" => {
                                 parser.category(&text, &mut element);
                             }
-                            "contextsinwhichthiselementcanbeused" => {
-                                parser.context(&text, &mut element);
-                            }
+                            "contextsinwhichthiselementcanbeused" => {}
                             "contentmodel" => {
                                 parser.content(&text, &mut element);
                             }

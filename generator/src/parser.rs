@@ -9,7 +9,6 @@ type Counts = HashMap<(usize, Parse), usize>;
 #[derive(Debug)]
 pub struct Parser {
     category: Counts,
-    context: Counts,
     content: Counts,
     tag_omission: Counts,
     attribute: Counts,
@@ -21,7 +20,6 @@ impl Parser {
     pub fn new() -> Self {
         let mut parser = Self {
             category: HashMap::new(),
-            context: HashMap::new(),
             content: HashMap::new(),
             tag_omission: HashMap::new(),
             attribute: HashMap::new(),
@@ -41,9 +39,6 @@ impl Parser {
 
         for (res, f) in Self::category_parsers() {
             push(res, *f, &mut parser.category);
-        }
-        for (res, f) in Self::context_parsers() {
-            push(res, *f, &mut parser.context);
         }
         for (res, f) in Self::content_parsers() {
             push(res, *f, &mut parser.content);
@@ -65,16 +60,6 @@ impl Parser {
         Self::parse(
             "category",
             &mut self.category,
-            &mut self.regexes,
-            text,
-            element,
-        );
-    }
-
-    pub fn context(&mut self, text: &str, element: &mut ParsedElement) {
-        Self::parse(
-            "context",
-            &mut self.context,
             &mut self.regexes,
             text,
             element,
@@ -129,7 +114,6 @@ impl Parser {
         };
 
         errors("categories", &self.category);
-        errors("context", &self.context);
         errors("content", &self.content);
         errors("tag_omission", &self.tag_omission);
         errors("attribute", &self.attribute);
@@ -192,79 +176,6 @@ impl Parser {
                 Some(())
             },
         )]
-    }
-
-    fn context_parsers() -> &'static [(&'static [&'static str], Parse)] {
-        &[
-            (
-                &[
-                    r"inside (\S+) elements",
-                    r"where (\S+) elements are expected",
-                    r"where (\S+) content is expected",
-                    r"where (\S+) content is expected, but only if there is an? \S+ element ancestor",
-                    r"where (\S+) content is expected, but only if it is a hierarchically correct \S+ element",
-                    r"where (\S+) content is expected in html documents, if there are no ancestor \S+ elements",
-                    r"as a child of an? (\S+) element",
-                    r"as a child of an? (\S+) element that doesn't have an? \S+ attribute",
-                    r"as a child of an? (\S+) element, before the \S+ element",
-                    r"as a child of an? (\S+) element, before any \S+ content",
-                    r"as a child of an? (\S+) element, before any \S+ content or \S+ elements",
-                    r"as a child of an? (\S+) element, after all \S+ elements",
-                    r"as a child of an? (\S+) element, after any \S+, \S+, and \S+ elements, but only if there are no \S+ elements that are children of the \S+ element",
-                    r"as a child of an? (\S+) element, after any \S+, \S+, \S+, \S+, and \S+ elements, but only if there are no other \S+ elements that are children of the \S+ element",
-                    r"as a child of an? (\S+) element, after any \S+ elements and before any \S+, \S+, \S+, and \S+ elements",
-                    r"as a child of an? (\S+) element, after any \S+, and \S+ elements and before any \S+, \S+, and \S+ elements, but only if there are no other \S+ elements that are children of the \S+ element",
-                    r"as a child of an? (\S+) element, either immediately before or immediately after an? \S+ element",
-                    r"as the first child of an? (\S+) element",
-                    r"as the first element in an? (\S+) element",
-                    r"as the first element child of an? (\S+) element",
-                    r"as the second element in an? (\S+) element",
-                    r"as the first or last child of an? (\S+) element",
-                    r"in an? (\S+) element that is a child of an? \S+ element",
-                    r"in an? (\S+) element containing no other \S+ elements",
-                    r"in an? (\S+) element of an html document, if there are no ancestor \S+ elements",
-                    r"if the \S+ attribute is present: where (\S+) content is expected",
-                    r"if the \S+ attribute is present but not in the \S+ declaration state: in an? (\S+) element",
-                    r"if the \S+ attribute is present but not in the \S+ declaration state: in an? (\S+) element that is a child of an? \S+ element",
-                    r"if the \S+ attribute is present, or if the element's \S+ attribute is in the \S+ declaration state: in an? (\S+) element",
-                    r"if the element is allowed in the body: where (\S+) content is expected",
-                    r"before \S+ or \S+ elements inside (\S+) elements",
-                    r"after \S+ or \S+ elements inside (\S+) elements",
-                    r"before \S+ or \S+ elements inside (\S+) elements that are children of an? \S+ element",
-                    r"after \S+ or \S+ elements inside (\S+) elements that are children of an? \S+ element",
-                ],
-                |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = simplify(text);
-                    let contexts = re
-                        .captures(&text)?
-                        .iter()
-                        .skip(1)
-                        .map(|capture| capture.unwrap().as_str())
-                        .collect::<Vec<_>>();
-
-                    tracing::trace!(element.name, ?contexts, text, "😍");
-                    for context in contexts {
-                        element.contexts.insert(context.to_owned());
-                    }
-
-                    Some(())
-                },
-            ),
-            (
-                &[
-                    r"as document's document element",
-                    r"wherever a subdocument fragment is allowed in a compound document",
-                ],
-                |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = simplify(text);
-                    re.captures(&text)?;
-                    assert_eq!(element.name, "html");
-
-                    tracing::trace!(element.name, text, "😍");
-                    Some(())
-                },
-            ),
-        ]
     }
 
     // TODO ..., but with no ... descendants. (Pass that to next stage?)
@@ -504,7 +415,6 @@ impl Parser {
 pub struct ParsedElement {
     pub name: String,
     pub categories: BTreeSet<String>,
-    pub contexts: BTreeSet<String>,
     pub contents: BTreeSet<String>,
     pub end_tag: bool,
     pub attributes: BTreeMap</* name: */ String, /* description: */ String>,
