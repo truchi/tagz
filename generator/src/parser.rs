@@ -1,6 +1,6 @@
 use crate::AttributeType;
 use regex::Regex;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use weedle::{interface::*, mixin::*, *};
 
 type Parse = fn(&Regex, &str, &mut ParsedElement) -> Option<()>;
@@ -511,12 +511,12 @@ impl Parser {
 #[derive(Debug)]
 pub struct ParsedElement {
     pub name: String,
-    pub categories: HashSet<String>,
-    pub contexts: HashSet<String>,
-    pub contents: HashSet<String>,
+    pub categories: BTreeSet<String>,
+    pub contexts: BTreeSet<String>,
+    pub contents: BTreeSet<String>,
     pub end_tag: bool,
     pub global_attributes: bool,
-    pub attributes: HashMap</* name: */ String, /* description: */ String>,
+    pub attributes: BTreeMap</* name: */ String, /* description: */ String>,
     pub interface: String,
 }
 
@@ -524,14 +524,14 @@ pub struct ParsedElement {
 pub struct ParsedInterface {
     pub name: String,
     pub inherits: Option<String>,
-    pub attributes: HashMap</* name: */ String, AttributeType>,
+    pub attributes: BTreeMap</* name: */ String, AttributeType>,
 }
 
 #[derive(Debug)]
 pub struct ParsedIdl {
-    pub interfaces: HashMap</* name: */ String, ParsedInterface>,
-    pub mixins: HashMap</* name: */ String, ParsedInterface>,
-    pub includes: HashMap</* left: */ String, /* right: */ HashSet<String>>,
+    pub interfaces: BTreeMap</* name: */ String, ParsedInterface>,
+    pub mixins: BTreeMap</* name: */ String, ParsedInterface>,
+    pub includes: BTreeMap</* left: */ String, /* right: */ BTreeSet<String>>,
 }
 
 impl ParsedIdl {
@@ -569,7 +569,7 @@ impl ParsedIdl {
             })
             .map(|interface| Self::parse_interface(interface))
             .map(|interface| (interface.name.clone(), interface))
-            .fold(HashMap::new(), |mut map, (name, interface)| {
+            .fold(BTreeMap::new(), |mut map, (name, interface)| {
                 assert!(map.insert(name, interface).is_none());
                 map
             });
@@ -581,7 +581,7 @@ impl ParsedIdl {
             })
             .map(|mixin| Self::parse_mixin(mixin))
             .map(|mixin| (mixin.name.clone(), mixin))
-            .fold(HashMap::new(), |mut map, (name, mixin)| {
+            .fold(BTreeMap::new(), |mut map, (name, mixin)| {
                 assert!(map.insert(name, mixin).is_none());
                 map
             });
@@ -593,7 +593,7 @@ impl ParsedIdl {
             })
             .map(|includes| Self::parse_includes(includes))
             .fold(
-                HashMap::<String, HashSet<String>>::new(),
+                BTreeMap::<String, BTreeSet<String>>::new(),
                 |mut map, (left, right)| {
                     assert!(map.entry(left).or_default().insert(right));
                     map

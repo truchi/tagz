@@ -1,6 +1,8 @@
 mod parser;
 mod spec;
 
+use proc_macro2::TokenStream;
+use quote::{quote, ToTokens};
 use serde::{Deserialize, Serialize};
 use spec::Spec;
 
@@ -123,6 +125,25 @@ impl TryFrom<Vec<Self>> for AttributeType {
                 Err(())
             }
         }
+    }
+}
+
+impl ToTokens for AttributeType {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            AttributeType::Bool => quote!(bool),
+            AttributeType::I16 => quote!(i16),
+            AttributeType::U16 => quote!(u16),
+            AttributeType::I32 => quote!(i32),
+            AttributeType::U32 => quote!(u32),
+            AttributeType::I64 => quote!(i64),
+            AttributeType::U64 => quote!(u64),
+            AttributeType::F32 => quote!(f32),
+            AttributeType::F64 => quote!(f64),
+            AttributeType::String => quote!(String),
+            AttributeType::BoolOrF64OrString => quote!(BoolOrF64OrString),
+        }
+        .to_tokens(tokens)
     }
 }
 
