@@ -152,7 +152,7 @@ impl ToTokens for AttributeType {
             AttributeType::U64 => quote!(u64),
             AttributeType::F32 => quote!(f32),
             AttributeType::F64 => quote!(f64),
-            AttributeType::String => quote!(String),
+            AttributeType::String => quote!(CowStr),
             AttributeType::BoolOrF64OrString => quote!(BoolOrF64OrString),
         }
         .to_tokens(tokens)
@@ -530,6 +530,11 @@ fn generate_files(elements: Vec<Element>) {
         let name = text::pascal(&element.name);
         let child = child_name(&element.name);
         let builder = builder_name(&element.name);
+        let child_fn = (!element.children.is_empty()).then_some(quote! {
+            pub fn child<T: Into<children::#child>>(child: T) -> builders::#builder {
+                <builders::#builder as Default>::default().child(child)
+            }
+        });
         let attributes = sort_attributes(&element.attributes)
             .into_iter()
             .map(|(name, ty)| (text::attribute(&name), ty))
@@ -537,6 +542,28 @@ fn generate_files(elements: Vec<Element>) {
         let children = (!element.children.is_empty()).then_some(quote! {
             pub children: Vec<children::#child>,
         });
+        let attribute_builders = sort_attributes(&element.attributes)
+            .into_iter()
+            .map(|(name, ty)| (text::attribute(&name), ty.to_token_stream()))
+            .map(|(name, ty)| {
+                quote! {
+                    pub fn #name<T: Into<#ty>>(#name: T) -> builders::#builder {
+                        <builders::#builder as Default>::default().#name(#name)
+                    }
+                }
+            });
+        let child_builders = element
+            .children
+            .iter()
+            .map(|name| (text::snake(name), text::pascal(name)))
+            .map(|(snake, pascal)| {
+                quote! {
+                    #[allow(non_snake_case)]
+                    pub fn #pascal<T: Into<#pascal>>(#snake: T) -> builders::#builder {
+                        <builders::#builder as Default>::default().#pascal(#snake)
+                    }
+                }
+            });
         let description = format!(" The `<{}>` element.", element.name);
         let link = format!(" [`MDN`]({MDN}/{})", element.name);
 
@@ -551,29 +578,29 @@ fn generate_files(elements: Vec<Element>) {
                 #[doc = #link]
                 #[derive(Clone, Default, Debug)]
                 pub struct #name {
-                    pub id: std::option::Option<String>,
-                    pub classes: std::collections::HashSet<String>,
-                    pub data: std::collections::HashMap<String, String>,
+                    pub id: StdOption<CowStr>,
+                    pub classes: HashSet<CowStr>,
+                    pub data: HashMap<CowStr, CowStr>,
                     #(#attributes)*
                     #children
                 }
 
                 impl #name {
-                    pub fn builder() -> builders::#builder {
-                        builders::#builder {
-                            element: #name::default(),
-                        }
+                    pub fn id<T: Into<CowStr>>(id: T) -> builders::#builder {
+                        <builders::#builder as Default>::default().id(id)
                     }
-                }
 
-                #[doc = #description]
-                ///
-                #[doc = #link]
-                #[allow(non_snake_case)]
-                pub fn #name() -> builders::#builder {
-                    builders::#builder {
-                        element: #name::default(),
+                    pub fn class<T: Into<CowStr>>(class: T) -> builders::#builder {
+                        <builders::#builder as Default>::default().class(class)
                     }
+
+                    pub fn data<K: Into<CowStr>, V: Into<CowStr>>(key: K, value: V) -> builders::#builder {
+                        <builders::#builder as Default>::default().data(key, value)
+                    }
+
+                    #child_fn
+                    #(#attribute_builders)*
+                    #(#child_builders)*
                 }
 
                 impl From<builders::#builder> for #name {
@@ -593,6 +620,25 @@ fn generate_files(elements: Vec<Element>) {
 
         let child = child_name(&element.name);
         let name = element.children.iter().map(|name| text::pascal(name));
+        let froms = element
+            .children
+            .iter()
+            .map(|name| (text::pascal(name), builder_name(name)))
+            .map(|(name, builder)| {
+                quote! {
+                    impl From<#name> for #child {
+                        fn from(child: #name) -> Self {
+                            #child::#name(child)
+                        }
+                    }
+
+                    impl From<builders::#builder> for #child {
+                        fn from(builder: builders::#builder) -> Self {
+                            #child::#name(builder.build())
+                        }
+                    }
+                }
+            });
         let description = format!(" The `<{}>` element's children.", element.name);
 
         write(
@@ -606,6 +652,8 @@ fn generate_files(elements: Vec<Element>) {
                 pub enum #child {
                     #(#name(#name)),*
                 }
+
+                #(#froms)*
             },
         );
     });
@@ -615,13 +663,19 @@ fn generate_files(elements: Vec<Element>) {
         let name = text::pascal(&element.name);
         let child = child_name(&element.name);
         let builder = builder_name(&element.name);
+        let child_fn = (!element.children.is_empty()).then_some(quote! {
+            pub fn child<T: Into<children::#child>>(mut self, child: T) -> Self {
+                self.element.children.push(child.into());
+                self
+            }
+        });
         let attributes = sort_attributes(&element.attributes)
             .into_iter()
             .map(|(name, ty)| (text::attribute(&name), ty.to_token_stream()))
             .map(|(name, ty)| {
                 quote! {
-                    pub fn #name(mut self, #name: #ty) -> Self {
-                        self.element.#name = Some(#name);
+                    pub fn #name<T: Into<#ty>>(mut self, #name: T) -> Self {
+                        self.element.#name = Some(#name.into());
                         self
                     }
                 }
@@ -633,20 +687,12 @@ fn generate_files(elements: Vec<Element>) {
             .map(|(snake, pascal)| {
                 quote! {
                     #[allow(non_snake_case)]
-                    pub fn #pascal(mut self, #snake: #pascal) -> Self {
-                        self.element.children.push(children::#child::#pascal(#snake));
+                    pub fn #pascal<T: Into<#pascal>>(mut self, #snake: T) -> Self {
+                        self.element.children.push(children::#child::#pascal(#snake.into()));
                         self
                     }
                 }
             });
-        let children = (!element.children.is_empty()).then_some(quote! {
-            #(#children)*
-
-            pub fn child(mut self, child: children::#child) -> Self {
-                self.element.children.push(child);
-                self
-            }
-        });
         let description = format!(" The `<{}>` element's builder.", element.name);
 
         write(
@@ -658,30 +704,37 @@ fn generate_files(elements: Vec<Element>) {
                 #[doc = #description]
                 #[derive(Clone, Default, Debug)]
                 pub struct #builder {
-                    pub(crate) element: #name,
+                    pub element: #name,
                 }
 
                 impl #builder {
-                    pub fn id(mut self, id: String) -> Self {
-                        self.element.id = Some(id);
-                        self
-                    }
-
-                    pub fn class(mut self, class: String) -> Self {
-                        self.element.classes.insert(class);
-                        self
-                    }
-
-                    pub fn data(mut self, key: String, value: String) -> Self {
-                        self.element.data.insert(key, value);
-                        self
-                    }
-
-                    #(#attributes)*
-                    #children
-
                     pub fn build(self) -> #name {
                         self.element
+                    }
+
+                    pub fn id<T: Into<CowStr>>(mut self, id: T) -> Self {
+                        self.element.id = Some(id.into());
+                        self
+                    }
+
+                    pub fn class<T: Into<CowStr>>(mut self, class: T) -> Self {
+                        self.element.classes.insert(class.into());
+                        self
+                    }
+
+                    pub fn data<K: Into<CowStr>, V: Into<CowStr>>(mut self, key: K, value: V) -> Self {
+                        self.element.data.insert(key.into(), value.into());
+                        self
+                    }
+
+                    #child_fn
+                    #(#attributes)*
+                    #(#children)*
+                }
+
+                impl From<#name> for #builder {
+                    fn from(element: #name) -> Self {
+                        Self { element }
                     }
                 }
             },
