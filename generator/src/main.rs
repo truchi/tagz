@@ -449,6 +449,8 @@ fn resolve(
 }
 
 fn generate_files(elements: Vec<Element>) {
+    const MDN: &'static str = "https://developer.mozilla.org/en-US/docs/Web/HTML/Element";
+
     fn child_name(s: &str) -> Ident {
         let s = s.to_case(Case::Pascal);
         ident!("{s}Child")
@@ -537,6 +539,7 @@ fn generate_files(elements: Vec<Element>) {
             pub children: Vec<children::#child>,
         });
         let description = format!(" The `<{}>` element.", element.name);
+        let link = format!(" [`MDN`]({MDN}/{})", element.name);
 
         write(
             "elements",
@@ -545,6 +548,8 @@ fn generate_files(elements: Vec<Element>) {
                 use crate::*;
 
                 #[doc = #description]
+                ///
+                #[doc = #link]
                 #[derive(Clone, Default, Debug)]
                 pub struct #name {
                     pub id: std::option::Option<String>,
@@ -564,6 +569,8 @@ fn generate_files(elements: Vec<Element>) {
                 }
 
                 #[doc = #description]
+                ///
+                #[doc = #link]
                 #[allow(non_snake_case)]
                 pub fn #name() -> builders::#builder {
                     builders::#builder {
