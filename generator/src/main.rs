@@ -620,6 +620,20 @@ fn generate_files(elements: Vec<Element>) {
 
         let child = child_name(&element.name);
         let name = element.children.iter().map(|name| text::pascal(name));
+        let text = element.text.then_some(quote! { Text(CowStr) });
+        let str_froms = element.text.then_some(quote! {
+            impl From<&'static str> for #child {
+                fn from(s: &'static str) -> Self {
+                    #child::Text(s.into())
+                }
+            }
+
+            impl From<String> for #child {
+                fn from(s: String) -> Self {
+                    #child::Text(s.into())
+                }
+            }
+        });
         let froms = element
             .children
             .iter()
@@ -650,10 +664,12 @@ fn generate_files(elements: Vec<Element>) {
                 #[doc = #description]
                 #[derive(Clone, Debug)]
                 pub enum #child {
-                    #(#name(#name)),*
+                    #(#name(#name),)*
+                    #text
                 }
 
                 #(#froms)*
+                #str_froms
             },
         );
     });
