@@ -3,6 +3,7 @@ mod spec;
 
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use spec::Spec;
 
@@ -145,6 +146,15 @@ impl ToTokens for AttributeType {
         }
         .to_tokens(tokens)
     }
+}
+
+fn simplify(text: &str) -> String {
+    Regex::new(r"\s+") // Collapse whitespace
+        .unwrap()
+        .replace_all(&text, " ")
+        .trim()
+        .trim_end_matches('.')
+        .to_lowercase()
 }
 
 #[tokio::main]

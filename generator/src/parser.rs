@@ -1,4 +1,4 @@
-use crate::AttributeType;
+use crate::{simplify, AttributeType};
 use regex::Regex;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use weedle::{interface::*, mixin::*, *};
@@ -156,15 +156,6 @@ impl Parser {
         tracing::warn!(element.name, section, text, "😓");
     }
 
-    fn simplify(text: &str) -> String {
-        Regex::new(r"\s+") // Collapse whitespace
-            .unwrap()
-            .replace_all(&text, " ")
-            .trim()
-            .trim_end_matches('.')
-            .to_lowercase()
-    }
-
     fn category_parsers() -> &'static [(&'static [&'static str], Parse)] {
         &[(
             &[
@@ -185,7 +176,7 @@ impl Parser {
                 r"none",
             ],
             |re: &Regex, text: &str, element: &mut ParsedElement| {
-                let text = Self::simplify(text);
+                let text = simplify(text);
                 let categories = re
                     .captures(&text)?
                     .iter()
@@ -243,7 +234,7 @@ impl Parser {
                     r"after \S+ or \S+ elements inside (\S+) elements that are children of an? \S+ element",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = Self::simplify(text);
+                    let text = simplify(text);
                     let contexts = re
                         .captures(&text)?
                         .iter()
@@ -265,7 +256,7 @@ impl Parser {
                     r"wherever a subdocument fragment is allowed in a compound document",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = Self::simplify(text);
+                    let text = simplify(text);
                     re.captures(&text)?;
                     assert_eq!(element.name, "html");
 
@@ -331,7 +322,7 @@ impl Parser {
                     r"when scripting is disabled, in an? \S+ element: in any order, zero or more (\S+) elements, zero or more (\S+) elements, and zero or more (\S+) elements",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = Self::simplify(text);
+                    let text = simplify(text);
                     let contents = re
                         .captures(&text)?
                         .iter()
@@ -353,7 +344,7 @@ impl Parser {
                     r"if there is an? \S+ attribute, the element must be either empty or contain only script documentation that also matches script content restrictions",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = Self::simplify(text);
+                    let text = simplify(text);
                     re.captures(&text)?;
                     assert_eq!(element.name, "script");
 
@@ -364,7 +355,7 @@ impl Parser {
             (
                 &[r"otherwise: text that conforms to the requirements given in the prose"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = Self::simplify(text);
+                    let text = simplify(text);
                     re.captures(&text)?;
                     assert_eq!(element.name, "noscript");
 
@@ -376,7 +367,7 @@ impl Parser {
                 // TODO: Read the prose for <ruby>
                 &[r"see prose"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = Self::simplify(text);
+                    let text = simplify(text);
                     re.captures(&text)?;
                     assert_eq!(element.name, "ruby");
 
@@ -395,7 +386,7 @@ impl Parser {
                     r"an? \S+ element's start|end tag can be omitted if .*",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = Self::simplify(text);
+                    let text = simplify(text);
                     re.captures(&text)?;
                     let end_tag = true;
 
@@ -407,7 +398,7 @@ impl Parser {
             (
                 &[r"no end tag"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = Self::simplify(text);
+                    let text = simplify(text);
                     re.captures(&text)?;
                     let end_tag = false;
 
@@ -424,12 +415,10 @@ impl Parser {
             (
                 &[r"global attributes"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = Self::simplify(text);
+                    let text = simplify(text);
                     re.captures(&text)?;
-                    let global_attributes = true;
 
-                    tracing::debug!(element.name, global_attributes, text, "😍");
-                    element.global_attributes = global_attributes;
+                    tracing::debug!(element.name, text, "😍");
                     Some(())
                 },
             ),
@@ -442,7 +431,7 @@ impl Parser {
                     r"if the element is not a child of an \S+ or \S+ element: (\S+) — (.*)",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = Self::simplify(text);
+                    let text = simplify(text);
                     let captures = re.captures(&text)?;
                     let name = captures.get(1).unwrap().as_str().to_string();
                     let description = captures
@@ -463,7 +452,7 @@ impl Parser {
                     r"any other attribute that has no namespace \(see prose\)",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
-                    let text = Self::simplify(text);
+                    let text = simplify(text);
                     re.captures(&text)?;
 
                     tracing::debug!(element.name, text, "😍");
@@ -491,7 +480,7 @@ impl Parser {
                 &[r"\[exposed=window.*", r"typedef .*"],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     // We only simplify the haystack here, parsing needs original text.
-                    re.captures(&Self::simplify(text))?;
+                    re.captures(&simplify(text))?;
 
                     tracing::debug!(element.name, "😍");
                     element.interface = ParsedIdl::parse(text)
@@ -515,7 +504,6 @@ pub struct ParsedElement {
     pub contexts: BTreeSet<String>,
     pub contents: BTreeSet<String>,
     pub end_tag: bool,
-    pub global_attributes: bool,
     pub attributes: BTreeMap</* name: */ String, /* description: */ String>,
     pub interface: String,
 }

@@ -1,6 +1,6 @@
 use crate::{
     parser::{ParsedElement, ParsedIdl, Parser},
-    AttributeType,
+    simplify, AttributeType,
 };
 use convert_case::{Case, Casing};
 use proc_macro2::{Ident, TokenStream};
@@ -30,14 +30,13 @@ macro_rules! ident {
 // - Void elements: https://html.spec.whatwg.org/multipage/syntax.html#elements-2
 // - global attributes and event handlers: https://html.spec.whatwg.org/multipage/dom.html#global-attributes
 // - attributes: https://html.spec.whatwg.org/multipage/syntax.html#attributes-2
-// - HTMLElement IDL: https://html.spec.whatwg.org/multipage/dom.html#elements-in-the-dom
 // - Categories: https://html.spec.whatwg.org/multipage/dom.html#content-models
+// - HTMLElement IDL: https://html.spec.whatwg.org/multipage/dom.html#elements-in-the-dom
 // - Custom elements: https://html.spec.whatwg.org/multipage/custom-elements.html#custom-elements
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Element {
     pub name: String,
-    pub global_attributes: bool,
     pub attributes: BTreeMap</* name: */ String, (AttributeType, /* description: */ String)>,
     pub children: BTreeSet<String>,
     pub text: bool,
@@ -65,11 +64,17 @@ impl Spec {
         tracing::info!("PREPARING");
 
         let html = Self::read_fetched();
+
+        let (global_attributes, global_handlers) = Self::parse_global_attributes(&html).await;
         let idl = Self::parse_idl(&html).await;
         let elements = Self::parse_elements(&html).await;
-        let elements = Self::resolve(idl, elements);
 
-        Self::generate(elements);
+        Self::generate(Self::resolve(
+            global_attributes,
+            global_handlers,
+            idl,
+            elements,
+        ));
     }
 }
 
@@ -104,6 +109,62 @@ impl Spec {
         ParsedIdl::parse(&idl)
     }
 
+    async fn parse_global_attributes(html: &Html) -> (Vec<String>, Vec<String>) {
+        const ATTRIBUTES: &str = concat!(
+            "the following attributes are common to ",
+            "and may be specified on all html elements ",
+            "(even those not defined in this specification):",
+        );
+        const HANDLERS: &str = concat!(
+            "the following event handler content attributes ",
+            "may be specified on any html element:",
+        );
+
+        let list = |needle: &str| {
+            html.select(&selector!("body > p"))
+                .map(|p| (p, p.text().collect::<String>()))
+                .find(|(_, text)| simplify(text) == needle)
+                .map(|(p, _)| p)
+                .unwrap()
+                .next_siblings()
+                .flat_map(ElementRef::wrap)
+                .find(|element| selector!("ul.brief").matches(element))
+                .unwrap()
+                .select(&selector!("a"))
+                .map(|a| a.text().collect::<String>())
+                .collect::<Vec<_>>()
+        };
+        let additional = {
+            let selector = selector!("body > p");
+            let ps = html
+                .select(&selector)
+                .map(|p| simplify(&p.text().collect::<String>()));
+            let re = regex::Regex::new(
+                r"^the (\S+), (\S+), and (\S+) attributes may be specified on all html elements$",
+            )
+            .unwrap();
+
+            let mut additional = None;
+            for text in ps {
+                if let Some(captures) = re.captures(&text) {
+                    additional = Some([
+                        captures[1].to_owned(),
+                        captures[2].to_owned(),
+                        captures[3].to_owned(),
+                    ]);
+                    break;
+                }
+            }
+
+            additional.unwrap()
+        };
+
+        (
+            list(ATTRIBUTES).into_iter().chain(additional).collect(),
+            list(HANDLERS),
+        )
+    }
+
     async fn parse_elements(html: &Html) -> Vec<ParsedElement> {
         let mut parser = Parser::new();
         let elements = html
@@ -132,7 +193,6 @@ impl Spec {
                     contexts: BTreeSet::new(),
                     contents: BTreeSet::new(),
                     end_tag: true,
-                    global_attributes: true,
                     attributes: BTreeMap::new(),
                     interface: String::from("__INVALID__"),
                 };
@@ -184,7 +244,12 @@ impl Spec {
         elements
     }
 
-    fn resolve(_idl: ParsedIdl, elements: Vec<ParsedElement>) -> Vec<Element> {
+    fn resolve(
+        global_attributes: Vec<String>,
+        global_handlers: Vec<String>,
+        _idl: ParsedIdl,
+        elements: Vec<ParsedElement>,
+    ) -> Vec<Element> {
         let names = elements
             .iter()
             .map(|element| element.name.clone())
@@ -193,9 +258,6 @@ impl Spec {
             BTreeMap::<String, BTreeSet<String>>::new(),
             |mut categories, element| {
                 for category in &element.categories {
-                    if category == "text" || category == "transparent" || category == "nothing" {
-                        dbg!(&category);
-                    }
                     categories
                         .entry(category.clone())
                         .or_default()
@@ -209,11 +271,16 @@ impl Spec {
             .into_iter()
             .map(|element| Element {
                 name: element.name.clone(),
-                global_attributes: element.global_attributes,
                 attributes: element
                     .attributes
                     .into_iter()
                     .map(|(name, description)| (name, (AttributeType::String, description)))
+                    .chain({
+                        global_attributes
+                            .iter()
+                            .chain(global_handlers.iter())
+                            .map(|name| (name.clone(), (AttributeType::String, String::new())))
+                    })
                     .collect(),
                 children: element
                     .contents
@@ -238,6 +305,7 @@ impl Spec {
                             // and we don't want to restrict to flow content only.
                             "transparent" => return names.clone(),
 
+                            // NOTE:
                             // We handle "text" on `Element::text` directly.
                             "text" => return children,
 
@@ -278,6 +346,7 @@ impl Spec {
                 "loop" => "loop_",
                 "for" => "for_",
                 "async" => "async_",
+                "id" => "id_",
                 s => s,
             };
             ident!("{s}")
