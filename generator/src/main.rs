@@ -110,9 +110,9 @@ enum AttributeType {
     U16,
     I32,
     U32,
+    F32,
     I64,
     U64,
-    F32,
     F64,
     BoolOrF64OrString,
 }
@@ -148,9 +148,9 @@ impl ToTokens for AttributeType {
             AttributeType::U16 => quote!(u16),
             AttributeType::I32 => quote!(i32),
             AttributeType::U32 => quote!(u32),
+            AttributeType::F32 => quote!(f32),
             AttributeType::I64 => quote!(i64),
             AttributeType::U64 => quote!(u64),
-            AttributeType::F32 => quote!(f32),
             AttributeType::F64 => quote!(f64),
             AttributeType::String => quote!(CowStr),
             AttributeType::BoolOrF64OrString => quote!(BoolOrF64OrString),
@@ -525,9 +525,7 @@ fn generate_files(elements: Vec<Element>) {
         }
     });
 
-    // TODO data-*: AttributeType!
     // TODO no Option for bools
-    // TODO add text in flow, phrasing, palpable.
 
     // Elements.
     elements.iter().for_each(|element| {
@@ -603,11 +601,34 @@ fn generate_files(elements: Vec<Element>) {
                         }
 
                         if !self.classes.is_empty() {
-                            f.field("classes", &self.classes.iter().collect::<Vec<_>>());
+                            f.field("classes", &self.classes);
                         }
 
                         if !self.datas.is_empty() {
-                            f.field("datas", &self.datas.iter().collect::<Vec<_>>());
+                            f.field(
+                                "datas",
+                                &self
+                                    .datas
+                                    .iter()
+                                    .map(|(key, value)| {
+                                        (
+                                            key,
+                                            match value {
+                                                AttributeType::String(value) => Box::new(value) as Box<dyn std::fmt::Debug>,
+                                                AttributeType::Bool(value) => Box::new(value),
+                                                AttributeType::I16(value) => Box::new(value),
+                                                AttributeType::U16(value) => Box::new(value),
+                                                AttributeType::I32(value) => Box::new(value),
+                                                AttributeType::U32(value) => Box::new(value),
+                                                AttributeType::F32(value) => Box::new(value),
+                                                AttributeType::I64(value) => Box::new(value),
+                                                AttributeType::U64(value) => Box::new(value),
+                                                AttributeType::F64(value) => Box::new(value),
+                                            },
+                                        )
+                                    })
+                                    .collect::<HashMap<_, _>>(),
+                            );
                         }
 
                         #(#attributes)*
@@ -669,7 +690,19 @@ fn generate_files(elements: Vec<Element>) {
                     }
 
                     for (key, value) in &self.datas {
-                        write!(f, " {key}=\"{value}\"")?;
+                        match value {
+                            AttributeType::String(value) => write!(f, " {key}=\"{value}\"")?,
+                            AttributeType::Bool(true) => write!(f, " {key}")?,
+                            AttributeType::Bool(false) => {}
+                            AttributeType::I16(value) => write!(f, " {key}={value}")?,
+                            AttributeType::U16(value) => write!(f, " {key}={value}")?,
+                            AttributeType::I32(value) => write!(f, " {key}={value}")?,
+                            AttributeType::U32(value) => write!(f, " {key}={value}")?,
+                            AttributeType::F32(value) => write!(f, " {key}={value}")?,
+                            AttributeType::I64(value) => write!(f, " {key}={value}")?,
+                            AttributeType::U64(value) => write!(f, " {key}={value}")?,
+                            AttributeType::F64(value) => write!(f, " {key}={value}")?,
+                        }
                     }
 
                     #(#attributes)*
@@ -713,7 +746,7 @@ fn generate_files(elements: Vec<Element>) {
                 pub struct #name {
                     pub id: StdOption<CowStr>,
                     pub classes: HashSet<CowStr>,
-                    pub datas: HashMap<CowStr, CowStr>,
+                    pub datas: HashMap<CowStr, AttributeType>,
                     #(#attributes)*
                     #children
                 }
@@ -731,11 +764,11 @@ fn generate_files(elements: Vec<Element>) {
                         <builders::#builder as Default>::default().classes(classes)
                     }
 
-                    pub fn data<K: Into<CowStr>, V: Into<CowStr>>(key: K, value: V) -> builders::#builder {
+                    pub fn data<K: Into<CowStr>, V: Into<AttributeType>>(key: K, value: V) -> builders::#builder {
                         <builders::#builder as Default>::default().data(key, value)
                     }
 
-                    pub fn datas<K: Into<CowStr>, V: Into<CowStr>, I: IntoIterator<Item = (K, V)>>(datas: I) -> builders::#builder {
+                    pub fn datas<K: Into<CowStr>, V: Into<AttributeType>, I: IntoIterator<Item = (K, V)>>(datas: I) -> builders::#builder {
                         <builders::#builder as Default>::default().datas(datas)
                     }
 
@@ -912,12 +945,12 @@ fn generate_files(elements: Vec<Element>) {
                         self
                     }
 
-                    pub fn data<K: Into<CowStr>, V: Into<CowStr>>(mut self, key: K, value: V) -> Self {
+                    pub fn data<K: Into<CowStr>, V: Into<AttributeType>>(mut self, key: K, value: V) -> Self {
                         self.element.datas.insert(key.into(), value.into());
                         self
                     }
 
-                    pub fn datas<K: Into<CowStr>, V: Into<CowStr>, I: IntoIterator<Item = (K, V)>>(mut self, datas: I) -> Self {
+                    pub fn datas<K: Into<CowStr>, V: Into<AttributeType>, I: IntoIterator<Item = (K, V)>>(mut self, datas: I) -> Self {
                         self.element.datas.extend(datas.into_iter().map(|(key, value)| (key.into(), value.into())));
                         self
                     }
