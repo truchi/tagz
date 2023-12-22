@@ -139,33 +139,33 @@ pub fn generate(element: &Element) -> TokenStream {
         };
         let open = {
             let attributes = element.attributes.iter().map(|(name, ty)| {
-                    let attribute = text::attribute(name);
-                    match ty {
-                        AttributeType::Bool => quote! {
-                            if self.#attribute {
-                                write!(f, " {}", #name)?;
-                            }
-                        },
-                        AttributeType::BoolOrF64OrString => quote! {
-                            match &self.#attribute {
-                                BoolOrF64OrString::Bool(false) => {}
-                                BoolOrF64OrString::Bool(true) => write!(f, " {}", #name)?,
-                                BoolOrF64OrString::F64(value) => write!(f, " {}={value}", #name)?,
-                                BoolOrF64OrString::String(value) => write!(f, " {}=\"{value}\"", #name)?,
-                            }
-                        },
-                        AttributeType::String => quote! {
-                            if let Some(value) = &self.#attribute {
-                                write!(f, " {}=\"{value}\"", #name)?;
-                            }
-                        },
-                        _ => quote! {
-                            if let Some(value) = &self.#attribute {
-                                write!(f, " {}={value}", #name)?;
-                            }
-                        },
-                    }
-                });
+                let attribute = text::attribute(name);
+                match ty {
+                    AttributeType::Bool => quote! {
+                        if self.#attribute {
+                            write!(f, " {}", #name)?;
+                        }
+                    },
+                    AttributeType::BoolOrF64OrString => quote! {
+                        match &self.#attribute {
+                            BoolOrF64OrString::Bool(false) => {}
+                            BoolOrF64OrString::Bool(true) => write!(f, " {}", #name)?,
+                            BoolOrF64OrString::F64(value) => write!(f, " {}={value}", #name)?,
+                            BoolOrF64OrString::String(value) => write!(f, " {}='{value}'", #name)?,
+                        }
+                    },
+                    AttributeType::String => quote! {
+                        if let Some(value) = &self.#attribute {
+                            write!(f, " {}='{value}'", #name)?;
+                        }
+                    },
+                    _ => quote! {
+                        if let Some(value) = &self.#attribute {
+                            write!(f, " {}={value}", #name)?;
+                        }
+                    },
+                }
+            });
             quote! {
                 write!(f, "<{}", #tag)?;
 

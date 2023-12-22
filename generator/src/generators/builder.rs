@@ -31,7 +31,9 @@ pub fn generate(element: &Element) -> TokenStream {
             },
             _ => quote! {
                 pub fn #name<T: Into<#ty>>(mut self, #name: T) -> Self {
-                    self.element.#name = Some(#name.into());
+                    let value = #name.into();
+                    debug_assert!(check_attribute_value(&AttributeType::from(value.clone())), "Invalid attribute value: {value:?}");
+                    self.element.#name = Some(value);
                     self
                 }
             },
@@ -58,27 +60,53 @@ pub fn generate(element: &Element) -> TokenStream {
             }
 
             pub fn id<T: Into<CowStr>>(mut self, id: T) -> Self {
-                self.element.id = Some(id.into());
+                let id = id.into();
+                debug_assert!(check_id(&id), "Invalid id: {id:?}");
+                self.element.id = Some(id);
                 self
             }
 
             pub fn class<T: Into<CowStr>>(mut self, class: T) -> Self {
-                self.element.classes.insert(class.into());
+                let class = class.into();
+                debug_assert!(check_class(&class), "Invalid class: {class:?}");
+                self.element.classes.insert(class);
                 self
             }
 
             pub fn classes<T: Into<CowStr>, I: IntoIterator<Item = T>>(mut self, classes: I) -> Self {
-                self.element.classes.extend(classes.into_iter().map(|class| class.into()));
+                self.element
+                    .classes
+                    .extend(classes.into_iter().map(|class| {
+                        let class = class.into();
+                        debug_assert!(check_class(&class), "Invalid class: {class:?}");
+                        class
+                    }));
                 self
             }
 
             pub fn data<K: Into<CowStr>, V: Into<AttributeType>>(mut self, key: K, value: V) -> Self {
+                let key = key.into();
+                let value = value.into();
+                debug_assert!(check_attribute_name(&key), "Invalid attribute name: {key:?}");
+                debug_assert!(check_attribute_value(&value), "Invalid attribute value: {value:?}");
                 self.element.datas.insert(key.into(), value.into());
                 self
             }
 
-            pub fn datas<K: Into<CowStr>, V: Into<AttributeType>, I: IntoIterator<Item = (K, V)>>(mut self, datas: I) -> Self {
-                self.element.datas.extend(datas.into_iter().map(|(key, value)| (key.into(), value.into())));
+            pub fn datas<K: Into<CowStr>, V: Into<AttributeType>, I: IntoIterator<Item = (K, V)>>(
+                mut self,
+                datas: I,
+            ) -> Self {
+                self.element
+                    .datas
+                    .extend(datas.into_iter().map(|(key, value)| {
+                        let key = key.into();
+                        let value = value.into();
+                        debug_assert!(check_attribute_name(&key), "Invalid attribute name: {key:?}");
+                        debug_assert!(check_attribute_value(&value), "Invalid attribute value: {value:?}");
+
+                        (key, value)
+                    }));
                 self
             }
 

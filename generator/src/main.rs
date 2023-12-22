@@ -42,11 +42,12 @@ use std::collections::{BTreeMap, BTreeSet};
 // - https://html.spec.whatwg.org/multipage/dom.html#content-models
 // - https://html.spec.whatwg.org/multipage/dom.html#elements-in-the-dom
 // - https://html.spec.whatwg.org/multipage/custom-elements.html#custom-elements
+// - https://html.spec.whatwg.org/entities.json
 
 // TODO
-// - Attributes run-time validation (debug or release)
 // - HTMX support
 // - Void elements ("Tag omission in text/html" is non-normative)
+// - Character references
 
 const MDN: &'static str = "https://developer.mozilla.org/en-US/docs/Web/HTML/Element";
 const URL: &'static str = "https://html.spec.whatwg.org";

@@ -143,3 +143,70 @@ impl From<f64> for AttributeType {
         Self::F64(f)
     }
 }
+
+/// https://html.spec.whatwg.org/multipage/dom.html#global-attributes
+/// > The id attribute value [...] must contain at least one character.
+/// > The value must not contain any ASCII whitespace.
+#[cfg(debug_assertions)]
+fn check_id(id: &str) -> bool {
+    !id.is_empty() && !id.chars().any(|c| c.is_ascii_whitespace())
+}
+
+///
+#[cfg(debug_assertions)]
+fn check_class(value: &str) -> bool {
+    check_attribute_value(&AttributeType::String(value.to_string().into()))
+}
+
+/// https://html.spec.whatwg.org/multipage/syntax.html#attributes-2
+/// > Attribute names must consist of one or more characters other than controls,
+/// > U+0020 SPACE, U+0022 ("), U+0027 ('), U+003E (>), U+002F (/), U+003D (=), and noncharacters.
+///
+/// https://html.spec.whatwg.org/multipage/dom.html#embedding-custom-non-visible-data-with-the-data-*-attributes
+/// > [...] has at least one character after the hyphen, is XML-compatible,
+/// > and contains no ASCII upper alphas.
+/// (NOTE: we relax the uppercase constraint)
+#[cfg(debug_assertions)]
+fn check_attribute_name(value: &str) -> bool {
+    fn contains_noncharacter(s: &str) -> bool {
+        s.chars().any(|c| match c as u32 {
+            #[rustfmt::skip]
+            0xFDD0..=0xFDEF
+            | 0xFFFE  | 0xFFFF  | 0x1FFFE | 0x1FFFF | 0x2FFFE | 0x2FFFF | 0x3FFFE | 0x3FFFF
+            | 0x4FFFE | 0x4FFFF | 0x5FFFE | 0x5FFFF | 0x6FFFE | 0x6FFFF | 0x7FFFE | 0x7FFFF
+            | 0x8FFFE | 0x8FFFF | 0x9FFFE | 0x9FFFF | 0xAFFFE | 0xAFFFF | 0xBFFFE | 0xBFFFF
+            | 0xCFFFE | 0xCFFFF | 0xDFFFE | 0xDFFFF | 0xEFFFE | 0xEFFFF | 0xFFFFE | 0xFFFFF
+            | 0x10FFFE | 0x10FFFF => true,
+            _ => false,
+        })
+    }
+
+    fn contains_control(s: &str) -> bool {
+        s.chars()
+            .any(|c| matches!(c as u32, 0x0000..=0x001F | 0x007F..=0x009F))
+    }
+
+    !value.is_empty()
+        && !contains_control(value)
+        && !contains_noncharacter(value)
+        && !value.chars().any(|c| {
+            c.is_ascii_control()
+                || c.is_ascii_whitespace()
+                || c == '"'
+                || c == '\''
+                || c == '>'
+                || c == '/'
+                || c == '='
+        })
+}
+
+/// https://html.spec.whatwg.org/multipage/syntax.html#attributes-2
+/// > Single-quoted attribute value syntax
+/// > [...] must not contain any literal U+0027 APOSTROPHE characters (') [...]
+#[cfg(debug_assertions)]
+fn check_attribute_value(value: &AttributeType) -> bool {
+    match value {
+        AttributeType::String(value) => !value.contains('\''),
+        _ => true,
+    }
+}
