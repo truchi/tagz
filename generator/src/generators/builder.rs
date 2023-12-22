@@ -5,7 +5,7 @@ use quote::quote;
 pub fn generate(element: &Element) -> TokenStream {
     let name = text::pascal(&element.name);
     let builder = text::builder(&element.name);
-    let children = (!element.children.is_empty())
+    let children = element.has_children()
             .then_some(text::child(&element.name))
             .map(|child| quote! {
                 pub fn child<T: Into<children::#child>>(mut self, child: T) -> Self {

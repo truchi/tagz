@@ -11,10 +11,10 @@ pub fn generate(element: &Element) -> TokenStream {
         .iter()
         .map(|(name, ty)| (text::attribute(name), ty))
         .map(|(name, ty)| quote! { pub #name: std::option::Option<#ty>, });
-    let children = (!element.children.is_empty()).then_some(quote! {
+    let children = element.has_children().then_some(quote! {
         pub children: Vec<children::#child>,
     });
-    let children_builder = (!element.children.is_empty()).then_some(quote! {
+    let children_builder = element.has_children().then_some(quote! {
             pub fn child<T: Into<children::#child>>(child: T) -> builders::#builder {
                 <builders::#builder as Default>::default().child(child)
             }
@@ -61,7 +61,7 @@ pub fn generate(element: &Element) -> TokenStream {
                 },
             }
         });
-        let children = (!element.children.is_empty()).then_some(quote! {
+        let children = element.has_children().then_some(quote! {
             if !self.children.is_empty() {
                 f.field("children", &self.children);
             }
@@ -185,7 +185,7 @@ pub fn generate(element: &Element) -> TokenStream {
                 write!(f, ">")?;
             }
         };
-        let children = (!element.children.is_empty()).then_some(quote! {
+        let children = element.has_children().then_some(quote! {
             for child in &self.children {
                 write!(f, "{child}")?;
             }

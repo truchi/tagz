@@ -117,6 +117,12 @@ struct Element {
     end_tag: bool,
 }
 
+impl Element {
+    fn has_children(&self) -> bool {
+        self.text || !self.children.is_empty()
+    }
+}
+
 #[derive(Serialize, Deserialize, Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Default, Debug)]
 enum AttributeType {
     #[default]
@@ -524,7 +530,7 @@ fn generate_files(elements: Vec<Element>) {
             .map(|name| quote! { mod #name; pub use #name::*; });
         let children = elements
             .iter()
-            .filter(|element| !element.children.is_empty())
+            .filter(|element| element.has_children())
             .map(|element| text::flat(&element.name))
             .map(|name| ident!("{name}"))
             .map(|name| quote! { mod #name; pub use #name::*; });
@@ -545,7 +551,7 @@ fn generate_files(elements: Vec<Element>) {
             generators::element::generate(&element),
         );
 
-        if !element.children.is_empty() {
+        if element.has_children() {
             write(
                 "children",
                 text::flat(&element.name),

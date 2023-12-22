@@ -18,6 +18,12 @@ pub fn generate(element: &Element) -> TokenStream {
                 #child::Text(s.into())
             }
         }
+
+        impl From<CowStr> for #child {
+            fn from(s: CowStr) -> Self {
+                #child::Text(s)
+            }
+        }
     });
     let froms = element
         .children
@@ -40,7 +46,8 @@ pub fn generate(element: &Element) -> TokenStream {
         });
     let debug = {
         let name = name.clone();
-        let text = (element.text)
+        let text = element
+            .text
             .then_some(quote! { #child::Text(text) => std::fmt::Debug::fmt(text, f), });
         quote! {
             impl std::fmt::Debug for #child {
@@ -55,12 +62,14 @@ pub fn generate(element: &Element) -> TokenStream {
     };
     let display = {
         let name = name.clone();
-        let text = (element.text).then_some(quote! { #child::Text(text) => write!(f, "{text}"), });
+        let text = element
+            .text
+            .then_some(quote! { #child::Text(text) => std::fmt::Display::fmt(text, f), });
         quote! {
             impl std::fmt::Display for #child {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     match self {
-                        #(#child::#name(child) => write!(f, "{child}"),)*
+                        #(#child::#name(child) => std::fmt::Display::fmt(child, f),)*
                         #text
 
                     }
