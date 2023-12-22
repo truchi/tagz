@@ -44,11 +44,10 @@ use std::collections::{BTreeMap, BTreeSet};
 // - https://html.spec.whatwg.org/multipage/custom-elements.html#custom-elements
 
 // TODO
-// - Void elements ("Tag omission in text/html" is non-normative)
-// - Attributes run-time validation (debug or release)
 // - Autonomous custom element
+// - Attributes run-time validation (debug or release)
 // - HTMX support
-// - no Option for bools
+// - Void elements ("Tag omission in text/html" is non-normative)
 
 const MDN: &'static str = "https://developer.mozilla.org/en-US/docs/Web/HTML/Element";
 const URL: &'static str = "https://html.spec.whatwg.org";

@@ -10,7 +10,11 @@ pub fn generate(element: &Element) -> TokenStream {
         .attributes
         .iter()
         .map(|(name, ty)| (text::attribute(name), ty))
-        .map(|(name, ty)| quote! { pub #name: std::option::Option<#ty>, });
+        .map(|(name, ty)| match ty {
+            AttributeType::Bool => quote! { pub #name: bool, },
+            AttributeType::BoolOrF64OrString => quote! { pub #name: BoolOrF64OrString, },
+            _ => quote! { pub #name: std::option::Option<#ty>, },
+        });
     let children = element.has_children().then_some(quote! {
         pub children: Vec<children::#child>,
     });
@@ -37,25 +41,23 @@ pub fn generate(element: &Element) -> TokenStream {
     let debug = {
         let tag = &element.name;
         let attributes = element.attributes.iter().map(|(name, ty)| {
-            let attr = text::attribute(name);
+            let attribute = text::attribute(name);
             match ty {
                 AttributeType::Bool => quote! {
-                    if let Some(true) = &self.#attr {
+                    if self.#attribute {
                         f.field(#name, &true);
                     }
                 },
                 AttributeType::BoolOrF64OrString => quote! {
-                    if let Some(value) = &self.#attr {
-                        match value {
-                            BoolOrF64OrString::Bool(true) => f.field(#name, &true),
-                            BoolOrF64OrString::Bool(false) => &mut f,
-                            BoolOrF64OrString::F64(value) => f.field(#name, &value),
-                            BoolOrF64OrString::String(value) => f.field(#name, &value),
-                        };
-                    }
+                    match &self.#attribute {
+                        BoolOrF64OrString::Bool(false) => &mut f,
+                        BoolOrF64OrString::Bool(true) => f.field(#name, &true),
+                        BoolOrF64OrString::F64(value) => f.field(#name, &value),
+                        BoolOrF64OrString::String(value) => f.field(#name, &value),
+                    };
                 },
                 _ => quote! {
-                    if let Some(value) = &self.#attr {
+                    if let Some(value) = &self.#attribute {
                         f.field(#name, &value);
                     }
                 },
@@ -120,30 +122,28 @@ pub fn generate(element: &Element) -> TokenStream {
         let doctype = (tag == "html").then_some(quote! { write!(f, "<!DOCTYPE html>")?; });
         let open = {
             let attributes = element.attributes.iter().map(|(name, ty)| {
-                    let attr = text::attribute(name);
+                    let attribute = text::attribute(name);
                     match ty {
                         AttributeType::Bool => quote! {
-                            if let Some(true) = &self.#attr {
+                            if self.#attribute {
                                 write!(f, " {}", #name)?;
                             }
                         },
                         AttributeType::BoolOrF64OrString => quote! {
-                            if let Some(value) = &self.#attr {
-                                match value {
-                                    BoolOrF64OrString::Bool(true) => write!(f, " {}", #name)?,
-                                    BoolOrF64OrString::Bool(false) => {}
-                                    BoolOrF64OrString::F64(value) => write!(f, " {}={value}", #name)?,
-                                    BoolOrF64OrString::String(value) => write!(f, " {}=\"{value}\"", #name)?,
-                                }
+                            match &self.#attribute {
+                                BoolOrF64OrString::Bool(false) => {}
+                                BoolOrF64OrString::Bool(true) => write!(f, " {}", #name)?,
+                                BoolOrF64OrString::F64(value) => write!(f, " {}={value}", #name)?,
+                                BoolOrF64OrString::String(value) => write!(f, " {}=\"{value}\"", #name)?,
                             }
                         },
                         AttributeType::String => quote! {
-                            if let Some(value) = &self.#attr {
+                            if let Some(value) = &self.#attribute {
                                 write!(f, " {}=\"{value}\"", #name)?;
                             }
                         },
                         _ => quote! {
-                            if let Some(value) = &self.#attr {
+                            if let Some(value) = &self.#attribute {
                                 write!(f, " {}={value}", #name)?;
                             }
                         },
@@ -167,9 +167,8 @@ pub fn generate(element: &Element) -> TokenStream {
 
                 for (key, value) in &self.datas {
                     match value {
-                        AttributeType::String(value) => write!(f, " {key}=\"{value}\"")?,
-                        AttributeType::Bool(true) => write!(f, " {key}")?,
                         AttributeType::Bool(false) => {}
+                        AttributeType::Bool(true) => write!(f, " {key}")?,
                         AttributeType::I16(value) => write!(f, " {key}={value}")?,
                         AttributeType::U16(value) => write!(f, " {key}={value}")?,
                         AttributeType::I32(value) => write!(f, " {key}={value}")?,
@@ -178,6 +177,7 @@ pub fn generate(element: &Element) -> TokenStream {
                         AttributeType::I64(value) => write!(f, " {key}={value}")?,
                         AttributeType::U64(value) => write!(f, " {key}={value}")?,
                         AttributeType::F64(value) => write!(f, " {key}={value}")?,
+                        AttributeType::String(value) => write!(f, " {key}=\"{value}\"")?,
                     }
                 }
 

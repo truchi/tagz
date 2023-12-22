@@ -16,6 +16,12 @@ pub enum BoolOrF64OrString {
     String(CowStr),
 }
 
+impl Default for BoolOrF64OrString {
+    fn default() -> Self {
+        Self::Bool(false)
+    }
+}
+
 impl From<bool> for BoolOrF64OrString {
     fn from(b: bool) -> Self {
         Self::Bool(b)
@@ -58,6 +64,12 @@ pub enum AttributeType {
     I64(i64),
     U64(u64),
     F64(f64),
+}
+
+impl Default for AttributeType {
+    fn default() -> Self {
+        Self::Bool(false)
+    }
 }
 
 impl From<&'static str> for AttributeType {

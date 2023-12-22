@@ -1,4 +1,4 @@
-use crate::{text, Element};
+use crate::{text, AttributeType, Element};
 use proc_macro2::TokenStream;
 use quote::quote;
 
@@ -22,13 +22,19 @@ pub fn generate(element: &Element) -> TokenStream {
         .attributes
         .iter()
         .map(|(name, ty)| (text::attribute(name), ty))
-        .map(|(name, ty)| {
-            quote! {
+        .map(|(name, ty)| match ty {
+            AttributeType::Bool | AttributeType::BoolOrF64OrString => quote! {
+                pub fn #name<T: Into<#ty>>(mut self, #name: T) -> Self {
+                    self.element.#name = #name.into();
+                    self
+                }
+            },
+            _ => quote! {
                 pub fn #name<T: Into<#ty>>(mut self, #name: T) -> Self {
                     self.element.#name = Some(#name.into());
                     self
                 }
-            }
+            },
         });
     let description = format!(" The `<{}>` element's builder.", element.name);
 
