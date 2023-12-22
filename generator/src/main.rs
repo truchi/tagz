@@ -525,6 +525,10 @@ fn generate_files(elements: Vec<Element>) {
         }
     });
 
+    // TODO data-*: AttributeType!
+    // TODO no Option for bools
+    // TODO add text in flow, phrasing, palpable.
+
     // Elements.
     elements.iter().for_each(|element| {
         let name = text::pascal(&element.name);
@@ -556,6 +560,143 @@ fn generate_files(elements: Vec<Element>) {
                     }
                 }
             });
+        let debug = {
+            let tag = &element.name;
+            let attributes = sort_attributes(&element.attributes).into_iter().map(|(name, ty)| {
+                let attr = text::attribute(&name);
+                match ty {
+                    AttributeType::Bool => quote! {
+                        if let Some(true) = &self.#attr {
+                            f.field(#name, &true);
+                        }
+                    },
+                    AttributeType::BoolOrF64OrString => quote! {
+                        if let Some(value) = &self.#attr {
+                            match value {
+                                BoolOrF64OrString::Bool(true) => f.field(#name, &true),
+                                BoolOrF64OrString::Bool(false) => &mut f,
+                                BoolOrF64OrString::F64(value) => f.field(#name, &value),
+                                BoolOrF64OrString::String(value) => f.field(#name, &value),
+                            };
+                        }
+                    },
+                    _ => quote! {
+                        if let Some(value) = &self.#attr {
+                            f.field(#name, &value);
+                        }
+                    },
+                }
+            });
+            let children = (!element.children.is_empty()).then_some(quote! {
+                if !self.children.is_empty() {
+                    f.field("children", &self.children);
+                }
+            });
+
+            quote! {
+                impl std::fmt::Debug for #name {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        let mut f = f.debug_struct(&format!("<{}>", #tag));
+
+                        if let Some(id) = &self.id {
+                            f.field("id", &id);
+                        }
+
+                        if !self.classes.is_empty() {
+                            f.field("classes", &self.classes.iter().collect::<Vec<_>>());
+                        }
+
+                        if !self.datas.is_empty() {
+                            f.field("datas", &self.datas.iter().collect::<Vec<_>>());
+                        }
+
+                        #(#attributes)*
+                        #children
+
+                        f.finish()
+                    }
+                }
+            }
+        };
+        let display = {
+            let tag = &element.name;
+            let doctype = (tag == "html").then_some(quote! { write!(f, "<!DOCTYPE html>")?; });
+            let open = {
+                let attributes = sort_attributes(&element.attributes).into_iter().map(|(name, ty)| {
+                    let attr = text::attribute(&name);
+                    match ty {
+                        AttributeType::Bool => quote! {
+                            if let Some(true) = &self.#attr {
+                                write!(f, " {}", #name)?;
+                            }
+                        },
+                        AttributeType::BoolOrF64OrString => quote! {
+                            if let Some(value) = &self.#attr {
+                                match value {
+                                    BoolOrF64OrString::Bool(true) => write!(f, " {}", #name)?,
+                                    BoolOrF64OrString::Bool(false) => {}
+                                    BoolOrF64OrString::F64(value) => write!(f, " {}={value}", #name)?,
+                                    BoolOrF64OrString::String(value) => write!(f, " {}=\"{value}\"", #name)?,
+                                }
+                            }
+                        },
+                        AttributeType::String => quote! {
+                            if let Some(value) = &self.#attr {
+                                write!(f, " {}=\"{value}\"", #name)?;
+                            }
+                        },
+                        _ => quote! {
+                            if let Some(value) = &self.#attr {
+                                write!(f, " {}={value}", #name)?;
+                            }
+                        },
+                    }
+                });
+                quote! {
+                    write!(f, "<{}", #tag)?;
+
+                    if let Some(id) = &self.id {
+                        write!(f, " id=\"{id}\"")?;
+                    }
+
+                    let mut classes = self.classes.iter();
+                    if let Some(class) = classes.next() {
+                        write!(f, " class=\"{class}")?;
+                        for class in classes {
+                            write!(f, " {class}")?;
+                        }
+                        write!(f, "\"")?;
+                    }
+
+                    for (key, value) in &self.datas {
+                        write!(f, " {key}=\"{value}\"")?;
+                    }
+
+                    #(#attributes)*
+                    write!(f, ">")?;
+                }
+            };
+            let children = (!element.children.is_empty()).then_some(
+                quote! {
+                    for child in &self.children {
+                        write!(f, "{child}")?;
+                    }
+                }
+            );
+            let end = element.end_tag.then_some(quote! { write!(f, "</{}>", #tag)?; });
+
+            quote! {
+                impl std::fmt::Display for #name {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        #doctype
+                        #open
+                        #children
+                        #end
+                        Ok(())
+                    }
+                }
+            }
+        };
         let description = format!(" The `<{}>` element.", element.name);
         let link = format!(" [`MDN`]({MDN}/{})", element.name);
 
@@ -568,7 +709,7 @@ fn generate_files(elements: Vec<Element>) {
                 #[doc = #description]
                 ///
                 #[doc = #link]
-                #[derive(Clone, Default, Debug)]
+                #[derive(Clone, Default)]
                 pub struct #name {
                     pub id: StdOption<CowStr>,
                     pub classes: HashSet<CowStr>,
@@ -607,6 +748,9 @@ fn generate_files(elements: Vec<Element>) {
                         builder.element
                     }
                 }
+
+                #debug
+                #display
             },
         );
     });
@@ -652,6 +796,37 @@ fn generate_files(elements: Vec<Element>) {
                     }
                 }
             });
+        let debug = {
+            let name = name.clone();
+            let text = (element.text)
+                .then_some(quote! { #child::Text(text) => std::fmt::Debug::fmt(text, f), });
+            quote! {
+                impl std::fmt::Debug for #child {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        match self {
+                            #(#child::#name(child) => std::fmt::Debug::fmt(child, f),)*
+                            #text
+                        }
+                    }
+                }
+            }
+        };
+        let display = {
+            let name = name.clone();
+            let text =
+                (element.text).then_some(quote! { #child::Text(text) => write!(f, "{text}"), });
+            quote! {
+                impl std::fmt::Display for #child {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        match self {
+                            #(#child::#name(child) => write!(f, "{child}"),)*
+                            #text
+
+                        }
+                    }
+                }
+            }
+        };
         let description = format!(" The `<{}>` element's children.", element.name);
 
         write(
@@ -661,7 +836,7 @@ fn generate_files(elements: Vec<Element>) {
                 use crate::*;
 
                 #[doc = #description]
-                #[derive(Clone, Debug)]
+                #[derive(Clone)]
                 pub enum #child {
                     #(#name(#name),)*
                     #text
@@ -669,6 +844,8 @@ fn generate_files(elements: Vec<Element>) {
 
                 #(#froms)*
                 #str_froms
+                #debug
+                #display
             },
         );
     });
@@ -752,6 +929,12 @@ fn generate_files(elements: Vec<Element>) {
                 impl From<#name> for #builder {
                     fn from(element: #name) -> Self {
                         Self { element }
+                    }
+                }
+
+                impl std::fmt::Display for #builder {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(f, "{}", self.element)
                     }
                 }
             },

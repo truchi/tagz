@@ -1,5 +1,6 @@
-spec.html
+/examples
 /generator/target
-/target
 /src/generated
+/target
+spec.html
 .DS_Store
