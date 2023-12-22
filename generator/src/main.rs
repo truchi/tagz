@@ -16,6 +16,11 @@ mod parsers {
     pub mod element;
     pub mod idl;
 }
+mod generators {
+    pub mod builder;
+    pub mod child;
+    pub mod element;
+}
 
 use convert_case::{Case, Casing};
 use parsers::{
@@ -43,7 +48,9 @@ use std::collections::{BTreeMap, BTreeSet};
 // - Attributes run-time validation (debug or release)
 // - Autonomous custom element
 // - HTMX support
+// - no Option for bools
 
+const MDN: &'static str = "https://developer.mozilla.org/en-US/docs/Web/HTML/Element";
 const URL: &'static str = "https://html.spec.whatwg.org";
 const SPEC: &'static str = "spec.html";
 const OUTPUT: &'static str = "src/generated";
@@ -65,37 +72,46 @@ mod text {
     }
 
     pub fn snake(s: &str) -> Ident {
-        let s = s.to_case(Case::Snake);
-        // Rust keywords
-        let s = match s.as_str() {
-            "as" => "as_",
-            "async" => "async_",
-            "for" => "for_",
-            "id" => "id_",
-            "loop" => "loop_",
-            "type" => "type_",
-            s => s,
-        };
-        ident!("{s}")
+        ident!(
+            "{}",
+            match s.to_case(Case::Snake).as_str() {
+                // Rust keywords
+                "as" => "as_",
+                "async" => "async_",
+                "for" => "for_",
+                "id" => "id_",
+                "loop" => "loop_",
+                "type" => "type_",
+                s => s,
+            }
+        )
     }
 
     pub fn pascal(s: &str) -> Ident {
-        let s = s.to_case(Case::Pascal);
-        ident!("{s}")
+        ident!("{}", s.to_case(Case::Pascal))
     }
 
     pub fn attribute(s: &str) -> Ident {
         match snake(s).to_string().as_str() {
-            "data" => ident!("data_"), // Conflicts with `data-*`
+            // Conflicts with `data-*`
+            "data" => ident!("data_"),
             s => ident!("{s}"),
         }
+    }
+
+    pub fn child(s: &str) -> Ident {
+        ident!("{}Child", s.to_case(Case::Pascal))
+    }
+
+    pub fn builder(s: &str) -> Ident {
+        ident!("{}Builder", s.to_case(Case::Pascal))
     }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Element {
     name: String,
-    attributes: BTreeMap<String, AttributeType>,
+    attributes: Vec<(String, AttributeType)>,
     children: BTreeSet<String>,
     text: bool,
     end_tag: bool,
@@ -455,18 +471,6 @@ fn resolve(
 }
 
 fn generate_files(elements: Vec<Element>) {
-    const MDN: &'static str = "https://developer.mozilla.org/en-US/docs/Web/HTML/Element";
-
-    fn child_name(s: &str) -> Ident {
-        let s = s.to_case(Case::Pascal);
-        ident!("{s}Child")
-    }
-
-    fn builder_name(s: &str) -> Ident {
-        let s = s.to_case(Case::Pascal);
-        ident!("{s}Builder")
-    }
-
     fn write<'a>(dir: impl Into<Option<&'a str>>, file: impl AsRef<str>, tokens: TokenStream) {
         let out = OUTPUT;
         let file = file.as_ref();
@@ -484,31 +488,33 @@ fn generate_files(elements: Vec<Element>) {
         std::fs::write(file, content).unwrap();
     }
 
-    let elements = {
-        let mut elements = elements;
-        elements.iter_mut().for_each(|element| {
-            // We handle those attributes manually.
-            assert!(element.attributes.remove("id").is_some());
-            assert!(element.attributes.remove("class").is_some());
-        });
-        elements
-    };
+    let elements = elements
+        .into_iter()
+        .map(|mut element| {
+            let mut attributes = element.attributes;
 
-    let sort_attributes = |attributes: &BTreeMap<String, AttributeType>| {
-        let mut attributes = attributes
-            .iter()
-            .map(|(name, ty)| (name.clone(), *ty))
-            .collect::<Vec<_>>();
-        attributes.sort_by(
-            |(a, _), (b, _)| match (a.starts_with("on"), b.starts_with("on")) {
-                (true, true) => a.cmp(&b),
-                (true, false) => std::cmp::Ordering::Greater,
-                (false, true) => std::cmp::Ordering::Less,
-                (false, false) => a.cmp(&b),
-            },
-        );
-        attributes
-    };
+            // We handle those attributes manually.
+            assert!(attributes.iter().find(|(n, _)| n == "id").is_some());
+            assert!(attributes.iter().find(|(n, _)| n == "class").is_some());
+
+            // Event handlers last.
+            attributes.sort_by(
+                |(a, _), (b, _)| match (a.starts_with("on"), b.starts_with("on")) {
+                    (true, true) => a.cmp(&b),
+                    (true, false) => std::cmp::Ordering::Greater,
+                    (false, true) => std::cmp::Ordering::Less,
+                    (false, false) => a.cmp(&b),
+                },
+            );
+
+            element.attributes = attributes
+                .into_iter()
+                .filter(|(name, _)| name != "id" && name != "class")
+                .collect();
+
+            element
+        })
+        .collect::<Vec<_>>();
 
     write(None, "mod", {
         let names = elements
@@ -532,452 +538,25 @@ fn generate_files(elements: Vec<Element>) {
         }
     });
 
-    // TODO no Option for bools
-
-    // Elements.
-    elements.iter().for_each(|element| {
-        let name = text::pascal(&element.name);
-        let child = child_name(&element.name);
-        let builder = builder_name(&element.name);
-        let attributes = sort_attributes(&element.attributes)
-            .into_iter()
-            .map(|(name, ty)| (text::attribute(&name), ty))
-            .map(|(name, ty)| quote! { pub #name: std::option::Option<#ty>, });
-        let children = (!element.children.is_empty()).then_some(quote! {
-            pub children: Vec<children::#child>,
-        });
-        let children_builder = (!element.children.is_empty()).then_some(quote! {
-            pub fn child<T: Into<children::#child>>(child: T) -> builders::#builder {
-                <builders::#builder as Default>::default().child(child)
-            }
-
-            pub fn children<T: Into<children::#child>, I: IntoIterator<Item = T>>(children: I) -> builders::#builder {
-                <builders::#builder as Default>::default().children(children)
-            }
-        });
-        let attribute_builders = sort_attributes(&element.attributes)
-            .into_iter()
-            .map(|(name, ty)| (text::attribute(&name), ty.to_token_stream()))
-            .map(|(name, ty)| {
-                quote! {
-                    pub fn #name<T: Into<#ty>>(#name: T) -> builders::#builder {
-                        <builders::#builder as Default>::default().#name(#name)
-                    }
-                }
-            });
-        let debug = {
-            let tag = &element.name;
-            let attributes = sort_attributes(&element.attributes).into_iter().map(|(name, ty)| {
-                let attr = text::attribute(&name);
-                match ty {
-                    AttributeType::Bool => quote! {
-                        if let Some(true) = &self.#attr {
-                            f.field(#name, &true);
-                        }
-                    },
-                    AttributeType::BoolOrF64OrString => quote! {
-                        if let Some(value) = &self.#attr {
-                            match value {
-                                BoolOrF64OrString::Bool(true) => f.field(#name, &true),
-                                BoolOrF64OrString::Bool(false) => &mut f,
-                                BoolOrF64OrString::F64(value) => f.field(#name, &value),
-                                BoolOrF64OrString::String(value) => f.field(#name, &value),
-                            };
-                        }
-                    },
-                    _ => quote! {
-                        if let Some(value) = &self.#attr {
-                            f.field(#name, &value);
-                        }
-                    },
-                }
-            });
-            let children = (!element.children.is_empty()).then_some(quote! {
-                if !self.children.is_empty() {
-                    f.field("children", &self.children);
-                }
-            });
-
-            quote! {
-                impl std::fmt::Debug for #name {
-                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        let mut f = f.debug_struct(&format!("<{}>", #tag));
-
-                        if let Some(id) = &self.id {
-                            f.field("id", &id);
-                        }
-
-                        if !self.classes.is_empty() {
-                            f.field("classes", &self.classes);
-                        }
-
-                        if !self.datas.is_empty() {
-                            f.field(
-                                "datas",
-                                &self
-                                    .datas
-                                    .iter()
-                                    .map(|(key, value)| {
-                                        (
-                                            key,
-                                            match value {
-                                                AttributeType::String(value) => Box::new(value) as Box<dyn std::fmt::Debug>,
-                                                AttributeType::Bool(value) => Box::new(value),
-                                                AttributeType::I16(value) => Box::new(value),
-                                                AttributeType::U16(value) => Box::new(value),
-                                                AttributeType::I32(value) => Box::new(value),
-                                                AttributeType::U32(value) => Box::new(value),
-                                                AttributeType::F32(value) => Box::new(value),
-                                                AttributeType::I64(value) => Box::new(value),
-                                                AttributeType::U64(value) => Box::new(value),
-                                                AttributeType::F64(value) => Box::new(value),
-                                            },
-                                        )
-                                    })
-                                    .collect::<HashMap<_, _>>(),
-                            );
-                        }
-
-                        #(#attributes)*
-                        #children
-
-                        f.finish()
-                    }
-                }
-            }
-        };
-        let display = {
-            let tag = &element.name;
-            let doctype = (tag == "html").then_some(quote! { write!(f, "<!DOCTYPE html>")?; });
-            let open = {
-                let attributes = sort_attributes(&element.attributes).into_iter().map(|(name, ty)| {
-                    let attr = text::attribute(&name);
-                    match ty {
-                        AttributeType::Bool => quote! {
-                            if let Some(true) = &self.#attr {
-                                write!(f, " {}", #name)?;
-                            }
-                        },
-                        AttributeType::BoolOrF64OrString => quote! {
-                            if let Some(value) = &self.#attr {
-                                match value {
-                                    BoolOrF64OrString::Bool(true) => write!(f, " {}", #name)?,
-                                    BoolOrF64OrString::Bool(false) => {}
-                                    BoolOrF64OrString::F64(value) => write!(f, " {}={value}", #name)?,
-                                    BoolOrF64OrString::String(value) => write!(f, " {}=\"{value}\"", #name)?,
-                                }
-                            }
-                        },
-                        AttributeType::String => quote! {
-                            if let Some(value) = &self.#attr {
-                                write!(f, " {}=\"{value}\"", #name)?;
-                            }
-                        },
-                        _ => quote! {
-                            if let Some(value) = &self.#attr {
-                                write!(f, " {}={value}", #name)?;
-                            }
-                        },
-                    }
-                });
-                quote! {
-                    write!(f, "<{}", #tag)?;
-
-                    if let Some(id) = &self.id {
-                        write!(f, " id=\"{id}\"")?;
-                    }
-
-                    let mut classes = self.classes.iter();
-                    if let Some(class) = classes.next() {
-                        write!(f, " class=\"{class}")?;
-                        for class in classes {
-                            write!(f, " {class}")?;
-                        }
-                        write!(f, "\"")?;
-                    }
-
-                    for (key, value) in &self.datas {
-                        match value {
-                            AttributeType::String(value) => write!(f, " {key}=\"{value}\"")?,
-                            AttributeType::Bool(true) => write!(f, " {key}")?,
-                            AttributeType::Bool(false) => {}
-                            AttributeType::I16(value) => write!(f, " {key}={value}")?,
-                            AttributeType::U16(value) => write!(f, " {key}={value}")?,
-                            AttributeType::I32(value) => write!(f, " {key}={value}")?,
-                            AttributeType::U32(value) => write!(f, " {key}={value}")?,
-                            AttributeType::F32(value) => write!(f, " {key}={value}")?,
-                            AttributeType::I64(value) => write!(f, " {key}={value}")?,
-                            AttributeType::U64(value) => write!(f, " {key}={value}")?,
-                            AttributeType::F64(value) => write!(f, " {key}={value}")?,
-                        }
-                    }
-
-                    #(#attributes)*
-                    write!(f, ">")?;
-                }
-            };
-            let children = (!element.children.is_empty()).then_some(
-                quote! {
-                    for child in &self.children {
-                        write!(f, "{child}")?;
-                    }
-                }
-            );
-            let end = element.end_tag.then_some(quote! { write!(f, "</{}>", #tag)?; });
-
-            quote! {
-                impl std::fmt::Display for #name {
-                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        #doctype
-                        #open
-                        #children
-                        #end
-                        Ok(())
-                    }
-                }
-            }
-        };
-        let description = format!(" The `<{}>` element.", element.name);
-        let link = format!(" [`MDN`]({MDN}/{})", element.name);
-
+    for element in elements {
         write(
             "elements",
             text::flat(&element.name),
-            quote! {
-                use crate::*;
-
-                #[doc = #description]
-                ///
-                #[doc = #link]
-                #[derive(Clone, Default)]
-                pub struct #name {
-                    pub id: StdOption<CowStr>,
-                    pub classes: HashSet<CowStr>,
-                    pub datas: HashMap<CowStr, AttributeType>,
-                    #(#attributes)*
-                    #children
-                }
-
-                impl #name {
-                    pub fn id<T: Into<CowStr>>(id: T) -> builders::#builder {
-                        <builders::#builder as Default>::default().id(id)
-                    }
-
-                    pub fn class<T: Into<CowStr>>(class: T) -> builders::#builder {
-                        <builders::#builder as Default>::default().class(class)
-                    }
-
-                    pub fn classes<T: Into<CowStr>, I: IntoIterator<Item = T>>(classes: I) -> builders::#builder {
-                        <builders::#builder as Default>::default().classes(classes)
-                    }
-
-                    pub fn data<K: Into<CowStr>, V: Into<AttributeType>>(key: K, value: V) -> builders::#builder {
-                        <builders::#builder as Default>::default().data(key, value)
-                    }
-
-                    pub fn datas<K: Into<CowStr>, V: Into<AttributeType>, I: IntoIterator<Item = (K, V)>>(datas: I) -> builders::#builder {
-                        <builders::#builder as Default>::default().datas(datas)
-                    }
-
-                    #children_builder
-                    #(#attribute_builders)*
-                }
-
-                impl From<builders::#builder> for #name {
-                    fn from(builder: builders::#builder) -> Self {
-                        builder.element
-                    }
-                }
-
-                #debug
-                #display
-            },
+            generators::element::generate(&element),
         );
-    });
 
-    // Children.
-    elements.iter().for_each(|element| {
-        if element.children.is_empty() {
-            return;
+        if !element.children.is_empty() {
+            write(
+                "children",
+                text::flat(&element.name),
+                generators::child::generate(&element),
+            );
         }
-
-        let child = child_name(&element.name);
-        let name = element.children.iter().map(|name| text::pascal(name));
-        let text = element.text.then_some(quote! { Text(CowStr) });
-        let str_froms = element.text.then_some(quote! {
-            impl From<&'static str> for #child {
-                fn from(s: &'static str) -> Self {
-                    #child::Text(s.into())
-                }
-            }
-
-            impl From<String> for #child {
-                fn from(s: String) -> Self {
-                    #child::Text(s.into())
-                }
-            }
-        });
-        let froms = element
-            .children
-            .iter()
-            .map(|name| (text::pascal(name), builder_name(name)))
-            .map(|(name, builder)| {
-                quote! {
-                    impl From<#name> for #child {
-                        fn from(child: #name) -> Self {
-                            #child::#name(child)
-                        }
-                    }
-
-                    impl From<builders::#builder> for #child {
-                        fn from(builder: builders::#builder) -> Self {
-                            #child::#name(builder.build())
-                        }
-                    }
-                }
-            });
-        let debug = {
-            let name = name.clone();
-            let text = (element.text)
-                .then_some(quote! { #child::Text(text) => std::fmt::Debug::fmt(text, f), });
-            quote! {
-                impl std::fmt::Debug for #child {
-                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        match self {
-                            #(#child::#name(child) => std::fmt::Debug::fmt(child, f),)*
-                            #text
-                        }
-                    }
-                }
-            }
-        };
-        let display = {
-            let name = name.clone();
-            let text =
-                (element.text).then_some(quote! { #child::Text(text) => write!(f, "{text}"), });
-            quote! {
-                impl std::fmt::Display for #child {
-                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        match self {
-                            #(#child::#name(child) => write!(f, "{child}"),)*
-                            #text
-
-                        }
-                    }
-                }
-            }
-        };
-        let description = format!(" The `<{}>` element's children.", element.name);
-
-        write(
-            "children",
-            text::flat(&element.name),
-            quote! {
-                use crate::*;
-
-                #[doc = #description]
-                #[derive(Clone)]
-                pub enum #child {
-                    #(#name(#name),)*
-                    #text
-                }
-
-                #(#froms)*
-                #str_froms
-                #debug
-                #display
-            },
-        );
-    });
-
-    // Builders.
-    elements.iter().for_each(|element| {
-        let name = text::pascal(&element.name);
-        let builder = builder_name(&element.name);
-        let children = (!element.children.is_empty())
-            .then_some(child_name(&element.name))
-            .map(|child| quote! {
-                pub fn child<T: Into<children::#child>>(mut self, child: T) -> Self {
-                    self.element.children.push(child.into());
-                    self
-                }
-
-                pub fn children<T: Into<children::#child>, I: IntoIterator<Item = T>>(mut self, children: I) -> Self {
-                    self.element.children.extend(children.into_iter().map(|child| child.into()));
-                    self
-                }
-            });
-        let attributes = sort_attributes(&element.attributes)
-            .into_iter()
-            .map(|(name, ty)| (text::attribute(&name), ty.to_token_stream()))
-            .map(|(name, ty)| {
-                quote! {
-                    pub fn #name<T: Into<#ty>>(mut self, #name: T) -> Self {
-                        self.element.#name = Some(#name.into());
-                        self
-                    }
-                }
-            });
-        let description = format!(" The `<{}>` element's builder.", element.name);
 
         write(
             "builders",
             text::flat(&element.name),
-            quote! {
-                use crate::*;
-
-                #[doc = #description]
-                #[derive(Clone, Default, Debug)]
-                pub struct #builder {
-                    pub element: #name,
-                }
-
-                impl #builder {
-                    pub fn build(self) -> #name {
-                        self.element
-                    }
-
-                    pub fn id<T: Into<CowStr>>(mut self, id: T) -> Self {
-                        self.element.id = Some(id.into());
-                        self
-                    }
-
-                    pub fn class<T: Into<CowStr>>(mut self, class: T) -> Self {
-                        self.element.classes.insert(class.into());
-                        self
-                    }
-
-                    pub fn classes<T: Into<CowStr>, I: IntoIterator<Item = T>>(mut self, classes: I) -> Self {
-                        self.element.classes.extend(classes.into_iter().map(|class| class.into()));
-                        self
-                    }
-
-                    pub fn data<K: Into<CowStr>, V: Into<AttributeType>>(mut self, key: K, value: V) -> Self {
-                        self.element.datas.insert(key.into(), value.into());
-                        self
-                    }
-
-                    pub fn datas<K: Into<CowStr>, V: Into<AttributeType>, I: IntoIterator<Item = (K, V)>>(mut self, datas: I) -> Self {
-                        self.element.datas.extend(datas.into_iter().map(|(key, value)| (key.into(), value.into())));
-                        self
-                    }
-
-                    #children
-                    #(#attributes)*
-                }
-
-                impl From<#name> for #builder {
-                    fn from(element: #name) -> Self {
-                        Self { element }
-                    }
-                }
-
-                impl std::fmt::Display for #builder {
-                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        write!(f, "{}", self.element)
-                    }
-                }
-            },
+            generators::builder::generate(&element),
         );
-    });
+    }
 }
