@@ -440,7 +440,14 @@ fn resolve(
                 // https://html.spec.whatwg.org/multipage/dom.html#text-content
                 // > Text is sometimes used as a content model on its own,
                 // > but is also phrasing content.
-                text: element.contents.contains("text") || element.contents.contains("phrasing"),
+                // https://html.spec.whatwg.org/multipage/dom.html#flow-content
+                // https://html.spec.whatwg.org/multipage/dom.html#phrasing-content
+                // https://html.spec.whatwg.org/multipage/dom.html#palpable-content
+                // > [...], text
+                text: element.contents.contains("text")
+                    || element.contents.contains("flow")
+                    || element.contents.contains("phrasing")
+                    || element.contents.contains("palpable"),
                 end_tag: element.end_tag,
             }
         })
