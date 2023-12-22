@@ -44,7 +44,6 @@ use std::collections::{BTreeMap, BTreeSet};
 // - https://html.spec.whatwg.org/multipage/custom-elements.html#custom-elements
 
 // TODO
-// - Autonomous custom element
 // - Attributes run-time validation (debug or release)
 // - HTMX support
 // - Void elements ("Tag omission in text/html" is non-normative)
@@ -114,6 +113,7 @@ struct Element {
     children: BTreeSet<String>,
     text: bool,
     end_tag: bool,
+    custom: bool,
 }
 
 impl Element {
@@ -299,6 +299,19 @@ fn parse_global_attributes(html: &Html) -> Vec<String> {
 
 fn parse_elements(html: &Html) -> Vec<ParsedElement> {
     let mut parser = Parser::new();
+    let custom = html
+        .select(&selector!("body > p"))
+        .map(|p| (p, p.text().collect::<String>()))
+        .find(|(_, text)| {
+            text::simplify(text)
+                == "autonomous custom elements have the following element definition:"
+        })
+        .map(|(p, _)| p)
+        .unwrap()
+        .next_siblings()
+        .flat_map(ElementRef::wrap)
+        .find(|element| selector!("dl.element").matches(element))
+        .map(|definition| (true, "custom".to_owned(), definition));
     let elements = html
         .select(&(selector!("h4")))
         .filter_map(|h4| {
@@ -316,8 +329,12 @@ fn parse_elements(html: &Html) -> Vec<ParsedElement> {
                     .find(|element| selector!("dl.element").matches(element))?,
             ))
         })
-        .flat_map(|(names, definition)| names.into_iter().map(move |name| (name, definition)))
-        .map(|(name, definition)| {
+        .flat_map(|(names, definition)| {
+            assert!(!names.contains(&"custom".to_string()));
+            names.into_iter().map(move |name| (false, name, definition))
+        })
+        .chain(custom)
+        .map(|(custom, name, definition)| {
             let mut section = None;
             let mut element = ParsedElement {
                 name: name.to_owned(),
@@ -325,7 +342,8 @@ fn parse_elements(html: &Html) -> Vec<ParsedElement> {
                 contents: BTreeSet::new(),
                 end_tag: true,
                 attributes: BTreeSet::new(),
-                interface: String::from("__INVALID__"),
+                interface: None,
+                custom,
             };
 
             for d in definition.select(&selector!("dt, dd")) {
@@ -398,7 +416,7 @@ fn resolve(
     elements
         .into_iter()
         .map(|element| {
-            let resolved = idl.resolve(&element.interface);
+            let resolved = idl.resolve(&element.interface.unwrap());
 
             Element {
                 name: element.name.clone(),
@@ -470,6 +488,7 @@ fn resolve(
                     || element.contents.contains("phrasing")
                     || element.contents.contains("palpable"),
                 end_tag: element.end_tag,
+                custom: element.custom,
             }
         })
         .collect()

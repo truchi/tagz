@@ -38,8 +38,20 @@ pub fn generate(element: &Element) -> TokenStream {
                 }
             }
         });
+    let from_builder = quote! {
+        impl From<builders::#builder> for #name {
+            fn from(builder: builders::#builder) -> Self {
+                builder.element
+            }
+        }
+    };
     let debug = {
         let tag = &element.name;
+        let tag = if element.custom {
+            quote! { self.tag }
+        } else {
+            quote! { #tag }
+        };
         let attributes = element.attributes.iter().map(|(name, ty)| {
             let attribute = text::attribute(name);
             match ty {
@@ -120,6 +132,11 @@ pub fn generate(element: &Element) -> TokenStream {
     let display = {
         let tag = &element.name;
         let doctype = (tag == "html").then_some(quote! { write!(f, "<!DOCTYPE html>")?; });
+        let tag = if element.custom {
+            quote! { self.tag }
+        } else {
+            quote! { #tag }
+        };
         let open = {
             let attributes = element.attributes.iter().map(|(name, ty)| {
                     let attribute = text::attribute(name);
@@ -206,60 +223,108 @@ pub fn generate(element: &Element) -> TokenStream {
             }
         }
     };
-    let description = format!(" The `<{}>` element.", element.name);
-    let link = format!(" [`MDN`]({MDN}/{})", element.name);
 
-    quote! {
-        use crate::*;
+    if element.custom {
+        assert!(element.has_children());
 
-        #[doc = #description]
-        ///
-        #[doc = #link]
-        #[derive(Clone, Default)]
-        pub struct #name {
-            pub id: StdOption<CowStr>,
-            pub classes: HashSet<CowStr>,
-            pub datas: HashMap<CowStr, AttributeType>,
-            #(#attributes)*
-            #children
+        let new = {
+            let attributes = element
+                .attributes
+                .iter()
+                .map(|(name, _)| text::attribute(name))
+                .map(|name| quote! { #name: Default::default(), });
+
+            quote! {
+                pub fn new<T: Into<CowStr>>(tag: T) -> builders::#builder {
+                    builders::#builder {
+                        element: #name {
+                            tag: tag.into(),
+                            id: None,
+                            classes: HashSet::new(),
+                            datas: HashMap::new(),
+                            #(#attributes)*
+                            children: Vec::new(),
+                        },
+                    }
+                }
+            }
+        };
+
+        quote! {
+            use crate::*;
+
+            /// An autonomous custom element.
+            ///
+            /// [`MDN`](https://developer.mozilla.org/en-US/docs/Web/API/Web_components/Using_custom_elements)
+            #[derive(Clone)]
+            pub struct #name {
+                pub tag: CowStr,
+                pub id: StdOption<CowStr>,
+                pub classes: HashSet<CowStr>,
+                pub datas: HashMap<CowStr, AttributeType>,
+                #(#attributes)*
+                #children
+            }
+
+            impl #name {
+                #new
+            }
+
+            #from_builder
+            #debug
+            #display
         }
+    } else {
+        let description = format!(" The `<{}>` element.", element.name);
+        let link = format!(" [`MDN`]({MDN}/{})", element.name);
 
-        impl #name {
-            pub fn new() -> Self {
-                <Self as Default>::default()
+        quote! {
+            use crate::*;
+
+            #[doc = #description]
+            ///
+            #[doc = #link]
+            #[derive(Clone, Default)]
+            pub struct #name {
+                pub id: StdOption<CowStr>,
+                pub classes: HashSet<CowStr>,
+                pub datas: HashMap<CowStr, AttributeType>,
+                #(#attributes)*
+                #children
             }
 
-            pub fn id<T: Into<CowStr>>(id: T) -> builders::#builder {
-                <builders::#builder as Default>::default().id(id)
+            impl #name {
+                pub fn new() -> Self {
+                    <Self as Default>::default()
+                }
+
+                pub fn id<T: Into<CowStr>>(id: T) -> builders::#builder {
+                    <builders::#builder as Default>::default().id(id)
+                }
+
+                pub fn class<T: Into<CowStr>>(class: T) -> builders::#builder {
+                    <builders::#builder as Default>::default().class(class)
+                }
+
+                pub fn classes<T: Into<CowStr>, I: IntoIterator<Item = T>>(classes: I) -> builders::#builder {
+                    <builders::#builder as Default>::default().classes(classes)
+                }
+
+                pub fn data<K: Into<CowStr>, V: Into<AttributeType>>(key: K, value: V) -> builders::#builder {
+                    <builders::#builder as Default>::default().data(key, value)
+                }
+
+                pub fn datas<K: Into<CowStr>, V: Into<AttributeType>, I: IntoIterator<Item = (K, V)>>(datas: I) -> builders::#builder {
+                    <builders::#builder as Default>::default().datas(datas)
+                }
+
+                #children_builder
+                #(#attribute_builders)*
             }
 
-            pub fn class<T: Into<CowStr>>(class: T) -> builders::#builder {
-                <builders::#builder as Default>::default().class(class)
-            }
-
-            pub fn classes<T: Into<CowStr>, I: IntoIterator<Item = T>>(classes: I) -> builders::#builder {
-                <builders::#builder as Default>::default().classes(classes)
-            }
-
-            pub fn data<K: Into<CowStr>, V: Into<AttributeType>>(key: K, value: V) -> builders::#builder {
-                <builders::#builder as Default>::default().data(key, value)
-            }
-
-            pub fn datas<K: Into<CowStr>, V: Into<AttributeType>, I: IntoIterator<Item = (K, V)>>(datas: I) -> builders::#builder {
-                <builders::#builder as Default>::default().datas(datas)
-            }
-
-            #children_builder
-            #(#attribute_builders)*
+            #from_builder
+            #debug
+            #display
         }
-
-        impl From<builders::#builder> for #name {
-            fn from(builder: builders::#builder) -> Self {
-                builder.element
-            }
-        }
-
-        #debug
-        #display
     }
 }

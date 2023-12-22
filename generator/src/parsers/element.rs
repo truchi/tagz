@@ -12,7 +12,8 @@ pub struct ParsedElement {
     pub contents: BTreeSet<String>,
     pub end_tag: bool,
     pub attributes: BTreeSet<String>,
-    pub interface: String,
+    pub interface: Option<String>,
+    pub custom: bool,
 }
 
 #[derive(Debug)]
@@ -155,6 +156,9 @@ impl Parser {
                 r"(\S+) content",
                 r"(\S+) element",
                 r"(\S+) (\S+) element",
+                r"(\S+) and (\S+) (\S+) element",
+                r"(\S+), (\S+), (\S+), and (\S+) (\S+) element",
+                r"(\S+), (\S+), (\S+), (\S+), and (\S+) (\S+) element",
                 r"if the element is allowed in the body: (\S+) content",
                 r"if the element has an? \S+ attribute: (\S+) content",
                 r"if the element's children include at least one \S+ element: (\S+) content",
@@ -163,9 +167,7 @@ impl Parser {
                 r"if the \S+ attribute is in the \S+ state: (\S+), (\S+), (\S+), and (\S+) (\S+) element",
                 r"if the \S+ attribute is not in the \S+ state: (\S+) content",
                 r"if the \S+ attribute is not in the \S+ state: (\S+), (\S+), (\S+), (\S+), and (\S+) (\S+) element",
-                r"(\S+) and (\S+) (\S+) element",
-                r"(\S+), (\S+), (\S+), and (\S+) (\S+) element",
-                r"(\S+), (\S+), (\S+), (\S+), and (\S+) (\S+) element",
+                r"for \S+ custom elements: (\S+), (\S+), (\S+), and (\S+) (\S+) element",
                 r"none",
             ],
             |re: &Regex, text: &str, element: &mut ParsedElement| {
@@ -338,6 +340,7 @@ impl Parser {
                     r"(\S+) — .*",
                     r"(\S+) \(in \S+\) — .*",
                     r"(\S+) \(in \S+ or \S+\) — .*",
+                    r"(\S+), for \S+ custom elements — .*",
                     r"if the element is not a child of an \S+ or \S+ element: (\S+) — .*",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
@@ -353,6 +356,7 @@ impl Parser {
             (
                 &[
                     r"global attributes",
+                    r"global attributes, except the \S+ attribute",
                     r"also, the \S+ attribute has special semantics on this element: .*",
                     r"also, the \S+ global attribute has special semantics on this element",
                     r"any other attribute that has no namespace \(see prose\)",
@@ -374,6 +378,7 @@ impl Parser {
                 &[
                     r"Uses? (\S+)\.",
                     r"Uses (\S+), as defined for \S+ elements\.",
+                    r"Supplied by the element's author \(inherits from (\S+)\)",
                 ],
                 |re: &Regex, text: &str, element: &mut ParsedElement| {
                     // We don't simplify here to capture case.
@@ -381,7 +386,7 @@ impl Parser {
                     let uses = captures[1].to_string();
 
                     tracing::debug!(element.name, uses, text, "🥳");
-                    element.interface = uses;
+                    element.interface = Some(uses);
                     Some(())
                 },
             ),
@@ -392,13 +397,15 @@ impl Parser {
                     re.captures(&text::simplify(text))?;
 
                     tracing::debug!(element.name, "🥳");
-                    element.interface = ParsedIdl::parse(text)
-                        .interfaces
-                        .values()
-                        .next()
-                        .unwrap()
-                        .name
-                        .clone();
+                    element.interface = Some(
+                        ParsedIdl::parse(text)
+                            .interfaces
+                            .values()
+                            .next()
+                            .unwrap()
+                            .name
+                            .clone(),
+                    );
                     Some(())
                 },
             ),

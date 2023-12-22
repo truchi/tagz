@@ -36,13 +36,18 @@ pub fn generate(element: &Element) -> TokenStream {
                 }
             },
         });
+    let derives = if element.custom {
+        quote! { #[derive(Clone, Debug)] }
+    } else {
+        quote! { #[derive(Clone, Default, Debug)] }
+    };
     let description = format!(" The `<{}>` element's builder.", element.name);
 
     quote! {
         use crate::*;
 
         #[doc = #description]
-        #[derive(Clone, Default, Debug)]
+        #derives
         pub struct #builder {
             pub element: #name,
         }
