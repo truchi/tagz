@@ -225,6 +225,10 @@ pub fn generate(element: &Element) -> TokenStream {
         }
 
         impl #name {
+            pub fn new() -> Self {
+                <Self as Default>::default()
+            }
+
             pub fn id<T: Into<CowStr>>(id: T) -> builders::#builder {
                 <builders::#builder as Default>::default().id(id)
             }
