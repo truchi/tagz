@@ -21,6 +21,7 @@ mod generators {
     pub mod child;
     pub mod element;
 }
+mod renames;
 
 use convert_case::{Case, Casing};
 use parsers::{
@@ -34,7 +35,6 @@ use scraper::{ElementRef, Html};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-// NOTE
 // Quick links:
 // - https://html.spec.whatwg.org/multipage/syntax.html#elements-2
 // - https://html.spec.whatwg.org/multipage/syntax.html#attributes-2
@@ -45,9 +45,17 @@ use std::collections::{BTreeMap, BTreeSet};
 // - https://html.spec.whatwg.org/entities.json
 
 // TODO
-// - HTMX support
 // - Void elements ("Tag omission in text/html" is non-normative)
-// - Character references
+//
+// Ideas:
+// - enumerated attribute values?
+// - typed link/input types?
+// - character references?
+// - htmx?
+// - css?
+// - aria?
+// - svg?
+// - mathml?
 
 const MDN: &'static str = "https://developer.mozilla.org/en-US/docs/Web/HTML/Element";
 const URL: &'static str = "https://html.spec.whatwg.org";
@@ -109,6 +117,7 @@ mod text {
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Element {
+    tag: String,
     name: String,
     attributes: Vec<(String, AttributeType)>,
     children: BTreeSet<String>,
@@ -293,8 +302,10 @@ fn parse_global_attributes(html: &Html) -> Vec<String> {
     list(ATTRIBUTES)
         .into_iter()
         .chain(additional)
-        .inspect(|attribute| assert!(!attribute.starts_with("on")))
-        .chain(list(HANDLERS))
+        .chain(list(HANDLERS).into_iter().map(|handler| {
+            assert!(handler.starts_with("on"));
+            format!("on_{}", handler.trim_start_matches("on"))
+        }))
         .collect()
 }
 
@@ -420,6 +431,7 @@ fn resolve(
             let resolved = idl.resolve(&element.interface.unwrap());
 
             Element {
+                tag: element.name.clone(),
                 name: element.name.clone(),
                 attributes: element
                     .attributes
@@ -513,28 +525,36 @@ fn generate_files(elements: Vec<Element>) {
         std::fs::write(file, content).unwrap();
     }
 
+    let renames = renames::elements();
     let elements = elements
         .into_iter()
         .map(|mut element| {
-            let mut attributes = element.attributes;
+            let attributes = element.attributes;
 
-            // We handle those attributes manually.
+            // We handle those attributes manually
             assert!(attributes.iter().find(|(n, _)| n == "id").is_some());
             assert!(attributes.iter().find(|(n, _)| n == "class").is_some());
+            element.attributes = attributes
+                .into_iter()
+                .filter(|(name, _)| name != "id" && name != "class")
+                .collect();
 
-            // Event handlers last.
-            attributes.sort_by(
-                |(a, _), (b, _)| match (a.starts_with("on"), b.starts_with("on")) {
+            // Event handlers last
+            element.attributes.sort_by(|(a, _), (b, _)| {
+                match (a.starts_with("on_"), b.starts_with("on_")) {
                     (true, true) => a.cmp(&b),
                     (true, false) => std::cmp::Ordering::Greater,
                     (false, true) => std::cmp::Ordering::Less,
                     (false, false) => a.cmp(&b),
-                },
-            );
+                }
+            });
 
-            element.attributes = attributes
+            // Rename elements
+            element.name = renames[&element.name].to_owned();
+            element.children = element
+                .children
                 .into_iter()
-                .filter(|(name, _)| name != "id" && name != "class")
+                .map(|name| renames[&name].to_owned())
                 .collect();
 
             element
@@ -542,22 +562,22 @@ fn generate_files(elements: Vec<Element>) {
         .collect::<Vec<_>>();
 
     write(None, "mod", {
-        let names = elements
+        let tags = elements
             .iter()
-            .map(|element| text::flat(&element.name))
-            .map(|name| ident!("{name}"))
-            .map(|name| quote! { mod #name; pub use #name::*; });
+            .map(|element| text::flat(&element.tag))
+            .map(|tag| ident!("{tag}"))
+            .map(|tag| quote! { mod #tag; pub use #tag::*; });
         let children = elements
             .iter()
             .filter(|element| element.has_children())
-            .map(|element| text::flat(&element.name))
-            .map(|name| ident!("{name}"))
-            .map(|name| quote! { mod #name; pub use #name::*; });
-        let builders = names.clone();
+            .map(|element| text::flat(&element.tag))
+            .map(|tag| ident!("{tag}"))
+            .map(|tag| quote! { mod #tag; pub use #tag::*; });
+        let builders = tags.clone();
 
         quote! {
             pub use elements::*;
-            pub mod elements { #(#names)* }
+            pub mod elements { #(#tags)* }
             pub mod children { #(#children)* }
             pub mod builders { #(#builders)* }
         }
@@ -566,21 +586,21 @@ fn generate_files(elements: Vec<Element>) {
     for element in elements {
         write(
             "elements",
-            text::flat(&element.name),
+            text::flat(&element.tag),
             generators::element::generate(&element),
         );
 
         if element.has_children() {
             write(
                 "children",
-                text::flat(&element.name),
+                text::flat(&element.tag),
                 generators::child::generate(&element),
             );
         }
 
         write(
             "builders",
-            text::flat(&element.name),
+            text::flat(&element.tag),
             generators::builder::generate(&element),
         );
     }

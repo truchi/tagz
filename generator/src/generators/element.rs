@@ -46,7 +46,7 @@ pub fn generate(element: &Element) -> TokenStream {
         }
     };
     let debug = {
-        let tag = &element.name;
+        let tag = &element.tag;
         let tag = if element.custom {
             quote! { self.tag }
         } else {
@@ -130,7 +130,7 @@ pub fn generate(element: &Element) -> TokenStream {
         }
     };
     let display = {
-        let tag = &element.name;
+        let tag = &element.tag;
         let doctype = (tag == "html").then_some(quote! { write!(f, "<!DOCTYPE html>")?; });
         let tag = if element.custom {
             quote! { self.tag }
@@ -275,8 +275,9 @@ pub fn generate(element: &Element) -> TokenStream {
             #display
         }
     } else {
-        let description = format!(" The `<{}>` element.", element.name);
-        let link = format!(" [`MDN`]({MDN}/{})", element.name);
+        let tag = &element.tag;
+        let description = format!(" The `<{tag}>` element.");
+        let link = format!(" [`MDN`]({MDN}/{tag})");
 
         quote! {
             use crate::*;
@@ -284,13 +285,14 @@ pub fn generate(element: &Element) -> TokenStream {
             #[doc = #description]
             ///
             #[doc = #link]
+            #[doc(alias = #tag)]
             #[derive(Clone, Default)]
             pub struct #name {
                 pub id: StdOption<CowStr>,
                 pub classes: HashSet<CowStr>,
                 pub datas: HashMap<CowStr, AttributeType>,
-                #(#attributes)*
                 #children
+                #(#attributes)*
             }
 
             impl #name {

@@ -43,7 +43,7 @@ pub fn generate(element: &Element) -> TokenStream {
     } else {
         quote! { #[derive(Clone, Default, Debug)] }
     };
-    let description = format!(" The `<{}>` element's builder.", element.name);
+    let description = format!(" The `<{}>` element's builder.", element.tag);
 
     quote! {
         use crate::*;

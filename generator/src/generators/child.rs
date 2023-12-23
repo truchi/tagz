@@ -77,7 +77,7 @@ pub fn generate(element: &Element) -> TokenStream {
             }
         }
     };
-    let description = format!(" The `<{}>` element's children.", element.name);
+    let description = format!(" The `<{}>` element's children.", element.tag);
 
     quote! {
         use crate::*;
