@@ -10,6 +10,7 @@ pub struct Script {
     pub id: StdOption<CowStr>,
     pub classes: HashSet<CowStr>,
     pub datas: HashMap<CowStr, AttributeType>,
+    pub children: Vec<children::ScriptChild>,
     pub accesskey: std::option::Option<CowStr>,
     pub async_: bool,
     pub autocapitalize: std::option::Option<CowStr>,
@@ -143,6 +144,14 @@ impl Script {
         I: IntoIterator<Item = (K, V)>,
     >(datas: I) -> builders::ScriptBuilder {
         <builders::ScriptBuilder as Default>::default().datas(datas)
+    }
+    pub fn child<T: Into<children::ScriptChild>>(child: T) -> builders::ScriptBuilder {
+        <builders::ScriptBuilder as Default>::default().child(child)
+    }
+    pub fn children<T: Into<children::ScriptChild>, I: IntoIterator<Item = T>>(
+        children: I,
+    ) -> builders::ScriptBuilder {
+        <builders::ScriptBuilder as Default>::default().children(children)
     }
     pub fn accesskey<T: Into<CowStr>>(accesskey: T) -> builders::ScriptBuilder {
         <builders::ScriptBuilder as Default>::default().accesskey(accesskey)
@@ -853,6 +862,9 @@ impl std::fmt::Debug for Script {
         if let Some(value) = &self.on_wheel {
             f.field("on_wheel", &value);
         }
+        if !self.children.is_empty() {
+            f.field("children", &self.children);
+        }
         f.finish()
     }
 }
@@ -1204,6 +1216,9 @@ impl std::fmt::Display for Script {
             write!(f, " {}='{value}'", "on_wheel")?;
         }
         write!(f, ">")?;
+        for child in &self.children {
+            write!(f, "{child}")?;
+        }
         write!(f, "</{}>", "script")?;
         Ok(())
     }

@@ -46,6 +46,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 // TODO
 // - Void elements ("Tag omission in text/html" is non-normative)
+// - check custom element name
 //
 // Ideas:
 // - enumerated attribute values?
@@ -190,6 +191,8 @@ impl ToTokens for AttributeType {
     }
 }
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ //
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -233,6 +236,8 @@ async fn main() {
         }
     }
 }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ //
 
 fn parse_idl(html: &Html) -> ParsedIdl {
     let idl = html
@@ -403,6 +408,8 @@ fn parse_elements(html: &Html) -> Vec<ParsedElement> {
     elements
 }
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ //
+
 fn resolve(
     global_attributes: Vec<String>,
     idl: ParsedIdl,
@@ -489,9 +496,6 @@ fn resolve(
                             }
                         }
                     }),
-                // https://html.spec.whatwg.org/multipage/dom.html#text-content
-                // > Text is sometimes used as a content model on its own,
-                // > but is also phrasing content.
                 // https://html.spec.whatwg.org/multipage/dom.html#flow-content
                 // https://html.spec.whatwg.org/multipage/dom.html#phrasing-content
                 // https://html.spec.whatwg.org/multipage/dom.html#palpable-content
@@ -499,13 +503,17 @@ fn resolve(
                 text: element.contents.contains("text")
                     || element.contents.contains("flow")
                     || element.contents.contains("phrasing")
-                    || element.contents.contains("palpable"),
+                    || element.contents.contains("palpable")
+                    || element.name == "script"
+                    || element.name == "custom",
                 end_tag: element.end_tag,
                 custom: element.custom,
             }
         })
         .collect()
 }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ //
 
 fn generate_files(elements: Vec<Element>) {
     fn write<'a>(dir: impl Into<Option<&'a str>>, file: impl AsRef<str>, tokens: TokenStream) {

@@ -414,6 +414,8 @@ pub mod children {
     pub use summary::*;
     mod dialog;
     pub use dialog::*;
+    mod script;
+    pub use script::*;
     mod noscript;
     pub use noscript::*;
     mod slot;

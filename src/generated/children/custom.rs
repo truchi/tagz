@@ -117,6 +117,7 @@ pub enum CustomChild {
     Variable(Variable),
     Video(Video),
     WordBreak(WordBreak),
+    Text(CowStr),
 }
 impl From<Abbreviation> for CustomChild {
     fn from(child: Abbreviation) -> Self {
@@ -1248,6 +1249,21 @@ impl From<builders::WordBreakBuilder> for CustomChild {
         CustomChild::WordBreak(builder.build())
     }
 }
+impl From<&'static str> for CustomChild {
+    fn from(s: &'static str) -> Self {
+        CustomChild::Text(s.into())
+    }
+}
+impl From<String> for CustomChild {
+    fn from(s: String) -> Self {
+        CustomChild::Text(s.into())
+    }
+}
+impl From<CowStr> for CustomChild {
+    fn from(s: CowStr) -> Self {
+        CustomChild::Text(s)
+    }
+}
 impl std::fmt::Debug for CustomChild {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -1364,6 +1380,7 @@ impl std::fmt::Debug for CustomChild {
             CustomChild::Variable(child) => std::fmt::Debug::fmt(child, f),
             CustomChild::Video(child) => std::fmt::Debug::fmt(child, f),
             CustomChild::WordBreak(child) => std::fmt::Debug::fmt(child, f),
+            CustomChild::Text(text) => std::fmt::Debug::fmt(text, f),
         }
     }
 }
@@ -1483,6 +1500,7 @@ impl std::fmt::Display for CustomChild {
             CustomChild::Variable(child) => std::fmt::Display::fmt(child, f),
             CustomChild::Video(child) => std::fmt::Display::fmt(child, f),
             CustomChild::WordBreak(child) => std::fmt::Display::fmt(child, f),
+            CustomChild::Text(text) => std::fmt::Display::fmt(text, f),
         }
     }
 }

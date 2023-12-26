@@ -7,7 +7,9 @@ fn main() {
         .child(
             Head::child(Title::child("😍"))
                 .child(Script::src("script.js"))
-                .child(Link::href("style.css")),
+                .child(Script::child("console.log('Hello, world!');"))
+                .child(Link::rel("stylesheet").href("style.css"))
+                .child(Style::child("body { background: black; }")),
         )
         .child(
             Body::class("dark")
@@ -24,7 +26,12 @@ fn main() {
                         .target("_blank")
                         .child(Span::child("Link")),
                 )
-                .child(Custom::new("my-element").id("custom")),
+                .child(
+                    Custom::new("my-element")
+                        .id("custom")
+                        .data("foo", "bar")
+                        .child("Custom element!"),
+                ),
         );
 
     dbg!(&html);

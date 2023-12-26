@@ -79,6 +79,17 @@ impl ScriptBuilder {
             );
         self
     }
+    pub fn child<T: Into<children::ScriptChild>>(mut self, child: T) -> Self {
+        self.element.children.push(child.into());
+        self
+    }
+    pub fn children<T: Into<children::ScriptChild>, I: IntoIterator<Item = T>>(
+        mut self,
+        children: I,
+    ) -> Self {
+        self.element.children.extend(children.into_iter().map(|child| child.into()));
+        self
+    }
     pub fn accesskey<T: Into<CowStr>>(mut self, accesskey: T) -> Self {
         let value = accesskey.into();
         debug_assert!(
