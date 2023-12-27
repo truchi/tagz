@@ -877,16 +877,16 @@ impl std::fmt::Display for StrikeThrough {
         for (key, value) in &self.datas {
             match value {
                 AttributeType::Bool(false) => {}
-                AttributeType::Bool(true) => write!(f, " {key}")?,
-                AttributeType::I16(value) => write!(f, " {key}={value}")?,
-                AttributeType::U16(value) => write!(f, " {key}={value}")?,
-                AttributeType::I32(value) => write!(f, " {key}={value}")?,
-                AttributeType::U32(value) => write!(f, " {key}={value}")?,
-                AttributeType::F32(value) => write!(f, " {key}={value}")?,
-                AttributeType::I64(value) => write!(f, " {key}={value}")?,
-                AttributeType::U64(value) => write!(f, " {key}={value}")?,
-                AttributeType::F64(value) => write!(f, " {key}={value}")?,
-                AttributeType::String(value) => write!(f, " {key}=\"{value}\"")?,
+                AttributeType::Bool(true) => write!(f, " data-{key}")?,
+                AttributeType::I16(value) => write!(f, " data-{key}={value}")?,
+                AttributeType::U16(value) => write!(f, " data-{key}={value}")?,
+                AttributeType::I32(value) => write!(f, " data-{key}={value}")?,
+                AttributeType::U32(value) => write!(f, " data-{key}={value}")?,
+                AttributeType::F32(value) => write!(f, " data-{key}={value}")?,
+                AttributeType::I64(value) => write!(f, " data-{key}={value}")?,
+                AttributeType::U64(value) => write!(f, " data-{key}={value}")?,
+                AttributeType::F64(value) => write!(f, " data-{key}={value}")?,
+                AttributeType::String(value) => write!(f, " data-{key}=\"{value}\"")?,
             }
         }
         if let Some(value) = &self.accesskey {
