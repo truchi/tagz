@@ -817,15 +817,15 @@ impl std::fmt::Display for TableFoot {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<{}", "tfoot")?;
         if let Some(id) = &self.id {
-            write!(f, " id=\"{id}\"")?;
+            write!(f, " id='{id}'")?;
         }
         let mut classes = self.classes.iter();
         if let Some(class) = classes.next() {
-            write!(f, " class=\"{class}")?;
+            write!(f, " class='{class}")?;
             for class in classes {
                 write!(f, " {class}")?;
             }
-            write!(f, "\"")?;
+            write!(f, "'")?;
         }
         for (key, value) in &self.datas {
             match value {
@@ -839,7 +839,7 @@ impl std::fmt::Display for TableFoot {
                 AttributeType::I64(value) => write!(f, " data-{key}={value}")?,
                 AttributeType::U64(value) => write!(f, " data-{key}={value}")?,
                 AttributeType::F64(value) => write!(f, " data-{key}={value}")?,
-                AttributeType::String(value) => write!(f, " data-{key}=\"{value}\"")?,
+                AttributeType::String(value) => write!(f, " data-{key}='{value}'")?,
             }
         }
         if let Some(value) = &self.accesskey {
