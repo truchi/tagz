@@ -894,214 +894,214 @@ impl std::fmt::Display for Code {
             write!(f, " {}", "translate")?;
         }
         if let Some(value) = &self.on_auxclick {
-            write!(f, " {}='{value}'", "on_auxclick")?;
+            write!(f, " {}='{value}'", "onauxclick")?;
         }
         if let Some(value) = &self.on_beforeinput {
-            write!(f, " {}='{value}'", "on_beforeinput")?;
+            write!(f, " {}='{value}'", "onbeforeinput")?;
         }
         if let Some(value) = &self.on_beforematch {
-            write!(f, " {}='{value}'", "on_beforematch")?;
+            write!(f, " {}='{value}'", "onbeforematch")?;
         }
         if let Some(value) = &self.on_beforetoggle {
-            write!(f, " {}='{value}'", "on_beforetoggle")?;
+            write!(f, " {}='{value}'", "onbeforetoggle")?;
         }
         if let Some(value) = &self.on_blur {
-            write!(f, " {}='{value}'", "on_blur")?;
+            write!(f, " {}='{value}'", "onblur")?;
         }
         if let Some(value) = &self.on_cancel {
-            write!(f, " {}='{value}'", "on_cancel")?;
+            write!(f, " {}='{value}'", "oncancel")?;
         }
         if let Some(value) = &self.on_canplay {
-            write!(f, " {}='{value}'", "on_canplay")?;
+            write!(f, " {}='{value}'", "oncanplay")?;
         }
         if let Some(value) = &self.on_canplaythrough {
-            write!(f, " {}='{value}'", "on_canplaythrough")?;
+            write!(f, " {}='{value}'", "oncanplaythrough")?;
         }
         if let Some(value) = &self.on_change {
-            write!(f, " {}='{value}'", "on_change")?;
+            write!(f, " {}='{value}'", "onchange")?;
         }
         if let Some(value) = &self.on_click {
-            write!(f, " {}='{value}'", "on_click")?;
+            write!(f, " {}='{value}'", "onclick")?;
         }
         if let Some(value) = &self.on_close {
-            write!(f, " {}='{value}'", "on_close")?;
+            write!(f, " {}='{value}'", "onclose")?;
         }
         if let Some(value) = &self.on_contextlost {
-            write!(f, " {}='{value}'", "on_contextlost")?;
+            write!(f, " {}='{value}'", "oncontextlost")?;
         }
         if let Some(value) = &self.on_contextmenu {
-            write!(f, " {}='{value}'", "on_contextmenu")?;
+            write!(f, " {}='{value}'", "oncontextmenu")?;
         }
         if let Some(value) = &self.on_contextrestored {
-            write!(f, " {}='{value}'", "on_contextrestored")?;
+            write!(f, " {}='{value}'", "oncontextrestored")?;
         }
         if let Some(value) = &self.on_copy {
-            write!(f, " {}='{value}'", "on_copy")?;
+            write!(f, " {}='{value}'", "oncopy")?;
         }
         if let Some(value) = &self.on_cuechange {
-            write!(f, " {}='{value}'", "on_cuechange")?;
+            write!(f, " {}='{value}'", "oncuechange")?;
         }
         if let Some(value) = &self.on_cut {
-            write!(f, " {}='{value}'", "on_cut")?;
+            write!(f, " {}='{value}'", "oncut")?;
         }
         if let Some(value) = &self.on_dblclick {
-            write!(f, " {}='{value}'", "on_dblclick")?;
+            write!(f, " {}='{value}'", "ondblclick")?;
         }
         if let Some(value) = &self.on_drag {
-            write!(f, " {}='{value}'", "on_drag")?;
+            write!(f, " {}='{value}'", "ondrag")?;
         }
         if let Some(value) = &self.on_dragend {
-            write!(f, " {}='{value}'", "on_dragend")?;
+            write!(f, " {}='{value}'", "ondragend")?;
         }
         if let Some(value) = &self.on_dragenter {
-            write!(f, " {}='{value}'", "on_dragenter")?;
+            write!(f, " {}='{value}'", "ondragenter")?;
         }
         if let Some(value) = &self.on_dragleave {
-            write!(f, " {}='{value}'", "on_dragleave")?;
+            write!(f, " {}='{value}'", "ondragleave")?;
         }
         if let Some(value) = &self.on_dragover {
-            write!(f, " {}='{value}'", "on_dragover")?;
+            write!(f, " {}='{value}'", "ondragover")?;
         }
         if let Some(value) = &self.on_dragstart {
-            write!(f, " {}='{value}'", "on_dragstart")?;
+            write!(f, " {}='{value}'", "ondragstart")?;
         }
         if let Some(value) = &self.on_drop {
-            write!(f, " {}='{value}'", "on_drop")?;
+            write!(f, " {}='{value}'", "ondrop")?;
         }
         if let Some(value) = &self.on_durationchange {
-            write!(f, " {}='{value}'", "on_durationchange")?;
+            write!(f, " {}='{value}'", "ondurationchange")?;
         }
         if let Some(value) = &self.on_emptied {
-            write!(f, " {}='{value}'", "on_emptied")?;
+            write!(f, " {}='{value}'", "onemptied")?;
         }
         if let Some(value) = &self.on_ended {
-            write!(f, " {}='{value}'", "on_ended")?;
+            write!(f, " {}='{value}'", "onended")?;
         }
         if let Some(value) = &self.on_error {
-            write!(f, " {}='{value}'", "on_error")?;
+            write!(f, " {}='{value}'", "onerror")?;
         }
         if let Some(value) = &self.on_focus {
-            write!(f, " {}='{value}'", "on_focus")?;
+            write!(f, " {}='{value}'", "onfocus")?;
         }
         if let Some(value) = &self.on_formdata {
-            write!(f, " {}='{value}'", "on_formdata")?;
+            write!(f, " {}='{value}'", "onformdata")?;
         }
         if let Some(value) = &self.on_input {
-            write!(f, " {}='{value}'", "on_input")?;
+            write!(f, " {}='{value}'", "oninput")?;
         }
         if let Some(value) = &self.on_invalid {
-            write!(f, " {}='{value}'", "on_invalid")?;
+            write!(f, " {}='{value}'", "oninvalid")?;
         }
         if let Some(value) = &self.on_keydown {
-            write!(f, " {}='{value}'", "on_keydown")?;
+            write!(f, " {}='{value}'", "onkeydown")?;
         }
         if let Some(value) = &self.on_keypress {
-            write!(f, " {}='{value}'", "on_keypress")?;
+            write!(f, " {}='{value}'", "onkeypress")?;
         }
         if let Some(value) = &self.on_keyup {
-            write!(f, " {}='{value}'", "on_keyup")?;
+            write!(f, " {}='{value}'", "onkeyup")?;
         }
         if let Some(value) = &self.on_load {
-            write!(f, " {}='{value}'", "on_load")?;
+            write!(f, " {}='{value}'", "onload")?;
         }
         if let Some(value) = &self.on_loadeddata {
-            write!(f, " {}='{value}'", "on_loadeddata")?;
+            write!(f, " {}='{value}'", "onloadeddata")?;
         }
         if let Some(value) = &self.on_loadedmetadata {
-            write!(f, " {}='{value}'", "on_loadedmetadata")?;
+            write!(f, " {}='{value}'", "onloadedmetadata")?;
         }
         if let Some(value) = &self.on_loadstart {
-            write!(f, " {}='{value}'", "on_loadstart")?;
+            write!(f, " {}='{value}'", "onloadstart")?;
         }
         if let Some(value) = &self.on_mousedown {
-            write!(f, " {}='{value}'", "on_mousedown")?;
+            write!(f, " {}='{value}'", "onmousedown")?;
         }
         if let Some(value) = &self.on_mouseenter {
-            write!(f, " {}='{value}'", "on_mouseenter")?;
+            write!(f, " {}='{value}'", "onmouseenter")?;
         }
         if let Some(value) = &self.on_mouseleave {
-            write!(f, " {}='{value}'", "on_mouseleave")?;
+            write!(f, " {}='{value}'", "onmouseleave")?;
         }
         if let Some(value) = &self.on_mousemove {
-            write!(f, " {}='{value}'", "on_mousemove")?;
+            write!(f, " {}='{value}'", "onmousemove")?;
         }
         if let Some(value) = &self.on_mouseout {
-            write!(f, " {}='{value}'", "on_mouseout")?;
+            write!(f, " {}='{value}'", "onmouseout")?;
         }
         if let Some(value) = &self.on_mouseover {
-            write!(f, " {}='{value}'", "on_mouseover")?;
+            write!(f, " {}='{value}'", "onmouseover")?;
         }
         if let Some(value) = &self.on_mouseup {
-            write!(f, " {}='{value}'", "on_mouseup")?;
+            write!(f, " {}='{value}'", "onmouseup")?;
         }
         if let Some(value) = &self.on_paste {
-            write!(f, " {}='{value}'", "on_paste")?;
+            write!(f, " {}='{value}'", "onpaste")?;
         }
         if let Some(value) = &self.on_pause {
-            write!(f, " {}='{value}'", "on_pause")?;
+            write!(f, " {}='{value}'", "onpause")?;
         }
         if let Some(value) = &self.on_play {
-            write!(f, " {}='{value}'", "on_play")?;
+            write!(f, " {}='{value}'", "onplay")?;
         }
         if let Some(value) = &self.on_playing {
-            write!(f, " {}='{value}'", "on_playing")?;
+            write!(f, " {}='{value}'", "onplaying")?;
         }
         if let Some(value) = &self.on_progress {
-            write!(f, " {}='{value}'", "on_progress")?;
+            write!(f, " {}='{value}'", "onprogress")?;
         }
         if let Some(value) = &self.on_ratechange {
-            write!(f, " {}='{value}'", "on_ratechange")?;
+            write!(f, " {}='{value}'", "onratechange")?;
         }
         if let Some(value) = &self.on_reset {
-            write!(f, " {}='{value}'", "on_reset")?;
+            write!(f, " {}='{value}'", "onreset")?;
         }
         if let Some(value) = &self.on_resize {
-            write!(f, " {}='{value}'", "on_resize")?;
+            write!(f, " {}='{value}'", "onresize")?;
         }
         if let Some(value) = &self.on_scroll {
-            write!(f, " {}='{value}'", "on_scroll")?;
+            write!(f, " {}='{value}'", "onscroll")?;
         }
         if let Some(value) = &self.on_scrollend {
-            write!(f, " {}='{value}'", "on_scrollend")?;
+            write!(f, " {}='{value}'", "onscrollend")?;
         }
         if let Some(value) = &self.on_securitypolicyviolation {
-            write!(f, " {}='{value}'", "on_securitypolicyviolation")?;
+            write!(f, " {}='{value}'", "onsecuritypolicyviolation")?;
         }
         if let Some(value) = &self.on_seeked {
-            write!(f, " {}='{value}'", "on_seeked")?;
+            write!(f, " {}='{value}'", "onseeked")?;
         }
         if let Some(value) = &self.on_seeking {
-            write!(f, " {}='{value}'", "on_seeking")?;
+            write!(f, " {}='{value}'", "onseeking")?;
         }
         if let Some(value) = &self.on_select {
-            write!(f, " {}='{value}'", "on_select")?;
+            write!(f, " {}='{value}'", "onselect")?;
         }
         if let Some(value) = &self.on_slotchange {
-            write!(f, " {}='{value}'", "on_slotchange")?;
+            write!(f, " {}='{value}'", "onslotchange")?;
         }
         if let Some(value) = &self.on_stalled {
-            write!(f, " {}='{value}'", "on_stalled")?;
+            write!(f, " {}='{value}'", "onstalled")?;
         }
         if let Some(value) = &self.on_submit {
-            write!(f, " {}='{value}'", "on_submit")?;
+            write!(f, " {}='{value}'", "onsubmit")?;
         }
         if let Some(value) = &self.on_suspend {
-            write!(f, " {}='{value}'", "on_suspend")?;
+            write!(f, " {}='{value}'", "onsuspend")?;
         }
         if let Some(value) = &self.on_timeupdate {
-            write!(f, " {}='{value}'", "on_timeupdate")?;
+            write!(f, " {}='{value}'", "ontimeupdate")?;
         }
         if let Some(value) = &self.on_toggle {
-            write!(f, " {}='{value}'", "on_toggle")?;
+            write!(f, " {}='{value}'", "ontoggle")?;
         }
         if let Some(value) = &self.on_volumechange {
-            write!(f, " {}='{value}'", "on_volumechange")?;
+            write!(f, " {}='{value}'", "onvolumechange")?;
         }
         if let Some(value) = &self.on_waiting {
-            write!(f, " {}='{value}'", "on_waiting")?;
+            write!(f, " {}='{value}'", "onwaiting")?;
         }
         if let Some(value) = &self.on_wheel {
-            write!(f, " {}='{value}'", "on_wheel")?;
+            write!(f, " {}='{value}'", "onwheel")?;
         }
         write!(f, ">")?;
         for child in &self.children {

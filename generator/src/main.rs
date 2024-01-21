@@ -58,10 +58,14 @@ use std::collections::{BTreeMap, BTreeSet};
 // - svg?
 // - mathml?
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ //
+
 const MDN: &'static str = "https://developer.mozilla.org/en-US/docs/Web/HTML/Element";
 const URL: &'static str = "https://html.spec.whatwg.org";
 const SPEC: &'static str = "spec.html";
 const OUTPUT: &'static str = "src/generated";
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ //
 
 mod text {
     use super::*;
@@ -115,6 +119,8 @@ mod text {
         ident!("{}Builder", s.to_case(Case::Pascal))
     }
 }
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ //
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Element {

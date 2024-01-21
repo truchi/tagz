@@ -139,7 +139,14 @@ pub fn generate(element: &Element) -> TokenStream {
         };
         let open = {
             let attributes = element.attributes.iter().map(|(name, ty)| {
-                let attribute = text::attribute(name);
+                let attribute = text::attribute(&name);
+                let mut name = name.clone();
+                let name = if name.starts_with("on_") {
+                    name.remove(2);
+                    name
+                } else {
+                    name
+                };
                 match ty {
                     AttributeType::Bool => quote! {
                         if self.#attribute {
